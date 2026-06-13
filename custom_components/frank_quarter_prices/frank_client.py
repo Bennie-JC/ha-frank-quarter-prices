@@ -9,7 +9,7 @@ that the rest of the integration consumes.
 from __future__ import annotations
 
 import asyncio
-from datetime import date as date_type, datetime
+from datetime import date as date_type, datetime, timedelta
 import logging
 from typing import Any
 
@@ -32,19 +32,23 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-# GraphQL query for the quarter-hourly market prices on a given date.
+# GraphQL query for the market prices over a date range.
+#
+# This uses ``marketPricesElectricity(startDate, endDate)`` which returns the
+# native price blocks at Frank's own resolution (quarter-hourly / 15 minutes
+# where published, otherwise hourly). The legacy ``marketPrices(date)`` /
+# ``electricityPrices`` query only returns hourly (60-minute) data and must NOT
+# be used here.
 MARKET_PRICES_QUERY = """
-query MarketPrices($date: String!) {
-  marketPrices(date: $date) {
-    electricityPrices {
-      from
-      till
-      marketPrice
-      marketPriceTax
-      sourcingMarkupPrice
-      energyTaxPrice
-      perUnit
-    }
+query MarketPrices($startDate: Date!, $endDate: Date!) {
+  marketPricesElectricity(startDate: $startDate, endDate: $endDate) {
+    from
+    till
+    marketPrice
+    marketPriceTax
+    sourcingMarkupPrice
+    energyTaxPrice
+    perUnit
   }
 }
 """
@@ -84,9 +88,16 @@ class FrankClient:
         Returns a dict of the shape ``{"prices": [...]}`` where each price entry
         is normalized. Invalid records are skipped and logged.
         """
+        # Request the target day. ``endDate`` is set to the next day so the
+        # range covers the full target day regardless of the API's inclusive/
+        # exclusive end-date handling; the coordinator filters to the local
+        # calendar day afterwards.
         payload = {
             "query": MARKET_PRICES_QUERY,
-            "variables": {"date": target_date.isoformat()},
+            "variables": {
+                "startDate": target_date.isoformat(),
+                "endDate": (target_date + timedelta(days=1)).isoformat(),
+            },
             "operationName": "MarketPrices",
         }
 
@@ -154,10 +165,9 @@ class FrankClient:
     @staticmethod
     def _extract_electricity_prices(data: dict[str, Any]) -> list[dict[str, Any]]:
         """Safely extract the electricity prices list from the response."""
-        market_prices = (data.get("data") or {}).get("marketPrices") or {}
-        electricity_prices = market_prices.get("electricityPrices")
+        electricity_prices = (data.get("data") or {}).get("marketPricesElectricity")
         if not isinstance(electricity_prices, list):
-            _LOGGER.warning("No electricityPrices list found in response")
+            _LOGGER.warning("No marketPricesElectricity list found in response")
             return []
         return electricity_prices
 
