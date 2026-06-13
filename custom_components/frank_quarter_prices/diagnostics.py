@@ -7,13 +7,12 @@ from typing import TYPE_CHECKING, Any
 from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.core import HomeAssistant
 
-from .const import CONF_API_TOKEN
-
 if TYPE_CHECKING:
     from . import FrankQuarterPricesConfigEntry
 
-# Keys that must never be exposed in diagnostics output.
-TO_REDACT = {CONF_API_TOKEN}
+# No secrets are stored by this integration (the Frank market prices API
+# requires no authentication), so nothing needs to be redacted.
+TO_REDACT: set[str] = set()
 
 
 async def async_get_config_entry_diagnostics(

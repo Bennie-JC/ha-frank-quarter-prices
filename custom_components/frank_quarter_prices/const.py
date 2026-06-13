@@ -11,8 +11,6 @@ DOMAIN: Final = "frank_quarter_prices"
 PLATFORMS: Final[list[str]] = ["sensor", "binary_sensor"]
 
 # Configuration / option keys.
-CONF_API_TOKEN: Final = "api_token"
-CONF_SITE_REFERENCE: Final = "site_reference"
 CONF_COUNTRY: Final = "country"
 
 # Frank Energie GraphQL API.
