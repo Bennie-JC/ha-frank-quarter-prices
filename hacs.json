@@ -1,0 +1,7 @@
+{
+  "name": "Frank Quarter Prices",
+  "content_in_root": false,
+  "render_readme": true,
+  "domains": ["sensor", "binary_sensor"],
+  "homeassistant": "2025.1.0"
+}
