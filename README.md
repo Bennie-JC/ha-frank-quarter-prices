@@ -115,9 +115,9 @@ The four cheapest/most-expensive sensors each have:
 
 - **State:** the block's `total_price_eur_kwh` (EUR/kWh).
 - **Attributes:**
-  - `time` — the block window as `"HH:MM - HH:MM"` (e.g. `"13:45 - 14:00"`),
-  - `start` — the block start as a local ISO datetime,
-  - `end` — the block end as a local ISO datetime,
+  - `time` — the block's local **start** time as `"HH:MM"` (e.g. `"19:45"`),
+  - `timestamp` — the block start as a local ISO datetime,
+  - `end_timestamp` — the block end as a local ISO datetime,
   - `duration_minutes` — the block length (15 or 60),
   - `full_block` — the complete price breakdown.
 
@@ -125,7 +125,11 @@ Example:
 
 ```text
 sensor.frank_cheapest_today = 0.0735     # EUR/kWh
-  attribute time = "13:45 - 14:00"
+  attributes:
+    time: "19:45"
+    timestamp: "2026-06-13T19:45:00+02:00"
+    end_timestamp: "2026-06-13T20:00:00+02:00"
+    duration_minutes: 15
 ```
 
 The `*_tomorrow` sensors stay **unavailable** until Frank publishes tomorrow's prices.
@@ -154,12 +158,12 @@ The `sensor.frank_prices_today` and `sensor.frank_prices_tomorrow` sensors expos
 
 Frank Energie publishes the next day's prices during the afternoon (typically around **15:00 CET**). The integration handles this gracefully:
 
-- Tomorrow's prices are **always attempted** on every update.
+- Tomorrow's prices are **always attempted** on every update (every 15 minutes).
 - If they are **not yet available**, the integration:
   - keeps `binary_sensor.frank_tomorrow_prices_available` **off**,
   - leaves the `*_tomorrow` sensors **unavailable**,
-  - logs an **info** message only — it never raises an error or marks the integration as failed.
-- Once published, `binary_sensor.frank_tomorrow_prices_available` turns **on** and the tomorrow sensors populate.
+  - logs an **info** message only — it never raises `UpdateFailed` or marks the integration as failed just because tomorrow is missing.
+- Once published (typically after **15:00 local time**), `binary_sensor.frank_tomorrow_prices_available` turns **on** and the tomorrow sensors populate on the next 15-minute refresh.
 
 Use the binary sensor to gate automations that depend on tomorrow's prices.
 
@@ -197,7 +201,7 @@ Requests use a 30-second timeout and are retried up to 3 times. Invalid records 
 
 ## EMS integration examples
 
-Use the cheapest/most-expensive windows to drive an Energy Management System, charging, or heavy appliances. Each cheapest/most-expensive sensor exposes `start` and `end` attributes (ISO datetimes) that are convenient for scheduling.
+Use the cheapest/most-expensive windows to drive an Energy Management System, charging, or heavy appliances. Each cheapest/most-expensive sensor exposes `timestamp` and `end_timestamp` attributes (local ISO datetimes) that are convenient for scheduling.
 
 **Charge an EV during the cheapest block today:**
 
@@ -207,8 +211,8 @@ automation:
     trigger:
       - platform: template
         value_template: >
-          {{ now() >= state_attr('sensor.frank_cheapest_today', 'start') | as_datetime
-             and now() < state_attr('sensor.frank_cheapest_today', 'end') | as_datetime }}
+          {{ now() >= state_attr('sensor.frank_cheapest_today', 'timestamp') | as_datetime
+             and now() < state_attr('sensor.frank_cheapest_today', 'end_timestamp') | as_datetime }}
     action:
       - service: switch.turn_on
         target:
@@ -223,8 +227,8 @@ automation:
     trigger:
       - platform: template
         value_template: >
-          {{ now() >= state_attr('sensor.frank_most_expensive_today', 'start') | as_datetime
-             and now() < state_attr('sensor.frank_most_expensive_today', 'end') | as_datetime }}
+          {{ now() >= state_attr('sensor.frank_most_expensive_today', 'timestamp') | as_datetime
+             and now() < state_attr('sensor.frank_most_expensive_today', 'end_timestamp') | as_datetime }}
     action:
       - service: switch.turn_off
         target:
@@ -262,7 +266,7 @@ automation:
 **Time until the cheapest block today:**
 
 ```yaml
-{% set start = state_attr('sensor.frank_cheapest_today', 'start') | as_datetime %}
+{% set start = state_attr('sensor.frank_cheapest_today', 'timestamp') | as_datetime %}
 {% if start %}
   {{ (start - now()).total_seconds() // 60 }} minutes
 {% else %}

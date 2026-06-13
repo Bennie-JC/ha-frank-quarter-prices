@@ -46,15 +46,28 @@ def _hhmm(value: Any) -> str | None:
     return dt_util.as_local(value).strftime("%H:%M")
 
 
-def _time_range(block: dict[str, Any] | None) -> str | None:
-    """Return a human readable ``HH:MM - HH:MM`` local time range."""
+def _local_iso(value: Any) -> str | None:
+    """Return a local ISO datetime string for the given value."""
+    if not isinstance(value, datetime):
+        return None
+    return dt_util.as_local(value).isoformat()
+
+
+def _block_attributes(block: dict[str, Any] | None) -> dict[str, Any]:
+    """Return the shared attributes for a single price block.
+
+    ``time`` is the block's local start time (``HH:MM``); ``timestamp`` and
+    ``end_timestamp`` are the local ISO start/end datetimes.
+    """
     if block is None:
-        return None
-    start = _hhmm(block.get("from"))
-    end = _hhmm(block.get("till"))
-    if start is None or end is None:
-        return None
-    return f"{start} - {end}"
+        return {}
+    return {
+        "time": _hhmm(block.get("from")),
+        "timestamp": _local_iso(block.get("from")),
+        "end_timestamp": _local_iso(block.get("till")),
+        "duration_minutes": block.get("duration_minutes"),
+        "full_block": _full_block(block),
+    }
 
 
 def _full_block(block: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -115,16 +128,8 @@ class FrankCurrentPriceSensor(FrankQuarterPricesEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return start/end/duration and the full active price block."""
-        block = self._current_block()
-        if block is None:
-            return {}
-        return {
-            "start": _hhmm(block.get("from")),
-            "end": _hhmm(block.get("till")),
-            "duration_minutes": block.get("duration_minutes"),
-            "full_block": _full_block(block),
-        }
+        """Return time/timestamp/duration and the full active price block."""
+        return _block_attributes(self._current_block())
 
     def _current_block(self) -> dict[str, Any] | None:
         """Return the price block matching the current time slot."""
@@ -263,20 +268,5 @@ class FrankBlockSensor(FrankQuarterPricesEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return time range, start, end, duration and the full price block."""
-        block = self._block()
-        if block is None:
-            return {}
-        start = block.get("from")
-        till = block.get("till")
-        return {
-            "time": _time_range(block),
-            "start": dt_util.as_local(start).isoformat()
-            if isinstance(start, datetime)
-            else None,
-            "end": dt_util.as_local(till).isoformat()
-            if isinstance(till, datetime)
-            else None,
-            "duration_minutes": block.get("duration_minutes"),
-            "full_block": _full_block(block),
-        }
+        """Return time, timestamp, end_timestamp, duration and the full block."""
+        return _block_attributes(self._block())
