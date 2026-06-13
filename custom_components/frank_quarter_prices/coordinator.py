@@ -81,6 +81,15 @@ class FrankQuarterPricesCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         resolution_minutes = self._detect_resolution(today_prices or tomorrow_prices)
         current_price = self._determine_current_price(today_prices, now)
 
+        _LOGGER.debug(
+            "Update: today=%d blocks, tomorrow=%d blocks (available=%s), "
+            "resolution=%d min",
+            len(today_prices),
+            len(tomorrow_prices),
+            tomorrow_available,
+            resolution_minutes,
+        )
+
         return {
             "today": today_prices,
             "tomorrow": tomorrow_prices,

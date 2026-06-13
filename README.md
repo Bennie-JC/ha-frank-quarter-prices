@@ -198,20 +198,25 @@ https://graphql.frankenergie.nl/
 No authentication is required for market prices. The integration issues a query similar to:
 
 ```graphql
-query MarketPrices($startDate: Date!, $endDate: Date!) {
-  marketPricesElectricity(startDate: $startDate, endDate: $endDate) {
-    from
-    till
-    marketPrice
-    marketPriceTax
-    sourcingMarkupPrice
-    energyTaxPrice
-    perUnit
+query MarketPrices($date: String!, $resolution: PriceResolution!) {
+  marketPrices(date: $date, resolution: $resolution) {
+    electricityPrices {
+      from
+      till
+      resolution
+      marketPrice
+      marketPriceTax
+      sourcingMarkupPrice
+      energyTaxPrice
+      perUnit
+    }
   }
 }
 ```
 
-The `marketPricesElectricity` query returns the **native** price blocks at Frank's own resolution — **quarter-hourly (15-minute, 96 blocks/day)** where published, otherwise hourly. The blocks are never aggregated. (The legacy `marketPrices(date)` query, which only returns hourly data, is deliberately not used.)
+The integration requests `resolution: PT15M`, which returns **native quarter-hourly prices (96 blocks/day)** — no authentication required. The blocks are used exactly as returned and are never aggregated.
+
+> **Important:** the `resolution: PriceResolution!` argument is what unlocks quarter-hour data. Without it (or with `PT60M`) the same `marketPrices` query returns only **24 hourly blocks**, which is why the cheapest slot previously snapped to e.g. `14:00` instead of `13:45`. The `marketPricesElectricity(startDate, endDate)` query also only returns hourly data and is not used.
 
 Requests use a 30-second timeout and are retried up to 3 times. Invalid records are validated and skipped. Belgium (BE) is supported by sending the `x-country: BE` header; the Netherlands (NL) is the default.
 
@@ -344,7 +349,7 @@ No. Market prices are public and require no authentication.
 No. It exposes the market price components (market price, tax, sourcing markup, energy tax). Your effective tariff may differ depending on your contract.
 
 **What resolution are the prices?**
-Frank's native resolution via the `marketPricesElectricity` query — quarter-hourly (15-minute, **96 blocks per day**) where Frank publishes it, otherwise hourly (60-minute, 24 blocks). The blocks are used exactly as returned and are never aggregated, so cheapest/most-expensive times reflect the exact quarter-hour start (e.g. `13:45`).
+Native quarter-hourly (15-minute, **96 blocks per day**) — the integration requests `resolution: PT15M` from the public `marketPrices` query. If Frank has no quarter-hour data for a given day it returns hourly (60-minute, 24 blocks) instead. The blocks are used exactly as returned and are never aggregated, so cheapest/most-expensive times reflect the exact quarter-hour start (e.g. `13:45`).
 
 **How often does it update?**
 Every 15 minutes via a `DataUpdateCoordinator`.

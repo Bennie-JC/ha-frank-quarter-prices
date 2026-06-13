@@ -9,7 +9,7 @@ that the rest of the integration consumes.
 from __future__ import annotations
 
 import asyncio
-from datetime import date as date_type, datetime, timedelta
+from datetime import date as date_type, datetime
 import logging
 from typing import Any
 
@@ -32,23 +32,34 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-# GraphQL query for the market prices over a date range.
+# Price resolution requested from the API.
 #
-# This uses ``marketPricesElectricity(startDate, endDate)`` which returns the
-# native price blocks at Frank's own resolution (quarter-hourly / 15 minutes
-# where published, otherwise hourly). The legacy ``marketPrices(date)`` /
-# ``electricityPrices`` query only returns hourly (60-minute) data and must NOT
-# be used here.
+# ``PT15M`` returns native quarter-hourly prices (96 blocks/day); ``PT60M``
+# returns hourly prices (24 blocks/day). The public ``marketPrices`` query
+# accepts this ``PriceResolution`` argument without authentication, so we always
+# request quarter-hour data. When Frank has no quarter-hour data for a day it
+# transparently returns the hourly blocks instead.
+PRICE_RESOLUTION = "PT15M"
+
+# GraphQL query for the market prices on a given date at a chosen resolution.
+#
+# NOTE: the ``resolution: PriceResolution!`` argument is required to get native
+# quarter-hour data. Without it (the legacy form) the API only returns hourly
+# (60-minute) blocks. ``marketPricesElectricity(startDate, endDate)`` likewise
+# only returns hourly data and must NOT be used.
 MARKET_PRICES_QUERY = """
-query MarketPrices($startDate: Date!, $endDate: Date!) {
-  marketPricesElectricity(startDate: $startDate, endDate: $endDate) {
-    from
-    till
-    marketPrice
-    marketPriceTax
-    sourcingMarkupPrice
-    energyTaxPrice
-    perUnit
+query MarketPrices($date: String!, $resolution: PriceResolution!) {
+  marketPrices(date: $date, resolution: $resolution) {
+    electricityPrices {
+      from
+      till
+      resolution
+      marketPrice
+      marketPriceTax
+      sourcingMarkupPrice
+      energyTaxPrice
+      perUnit
+    }
   }
 }
 """
@@ -88,15 +99,11 @@ class FrankClient:
         Returns a dict of the shape ``{"prices": [...]}`` where each price entry
         is normalized. Invalid records are skipped and logged.
         """
-        # Request the target day. ``endDate`` is set to the next day so the
-        # range covers the full target day regardless of the API's inclusive/
-        # exclusive end-date handling; the coordinator filters to the local
-        # calendar day afterwards.
         payload = {
             "query": MARKET_PRICES_QUERY,
             "variables": {
-                "startDate": target_date.isoformat(),
-                "endDate": (target_date + timedelta(days=1)).isoformat(),
+                "date": target_date.isoformat(),
+                "resolution": PRICE_RESOLUTION,
             },
             "operationName": "MarketPrices",
         }
@@ -110,14 +117,39 @@ class FrankClient:
             if normalized is not None:
                 prices.append(normalized)
 
-        _LOGGER.debug(
-            "Fetched %d valid price records for %s (country=%s)",
-            len(prices),
-            target_date.isoformat(),
-            self._country,
-        )
+        self._log_price_summary(target_date, prices)
 
         return {"prices": prices}
+
+    @staticmethod
+    def _log_price_summary(
+        target_date: date_type, prices: list[dict[str, Any]]
+    ) -> None:
+        """Emit a debug summary: block count, first/last block and resolution."""
+        if not _LOGGER.isEnabledFor(logging.DEBUG):
+            return
+
+        count = len(prices)
+        if count == 0:
+            _LOGGER.debug("Fetched 0 price blocks for %s", target_date.isoformat())
+            return
+
+        first = prices[0]
+        last = prices[-1]
+        # Detect resolution from the first block's duration.
+        duration = first.get("duration_minutes")
+        resolution = 60 if isinstance(duration, int) and duration >= 60 else 15
+        _LOGGER.debug(
+            "Fetched %d price blocks for %s (resolution=%d min): "
+            "first=%s->%s last=%s->%s",
+            count,
+            target_date.isoformat(),
+            resolution,
+            first.get("from"),
+            first.get("till"),
+            last.get("from"),
+            last.get("till"),
+        )
 
     async def _async_request(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Perform the GraphQL request with timeout and retries."""
@@ -165,9 +197,10 @@ class FrankClient:
     @staticmethod
     def _extract_electricity_prices(data: dict[str, Any]) -> list[dict[str, Any]]:
         """Safely extract the electricity prices list from the response."""
-        electricity_prices = (data.get("data") or {}).get("marketPricesElectricity")
+        market_prices = (data.get("data") or {}).get("marketPrices") or {}
+        electricity_prices = market_prices.get("electricityPrices")
         if not isinstance(electricity_prices, list):
-            _LOGGER.warning("No marketPricesElectricity list found in response")
+            _LOGGER.warning("No electricityPrices list found in response")
             return []
         return electricity_prices
 
