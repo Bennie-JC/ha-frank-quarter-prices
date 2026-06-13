@@ -20,8 +20,8 @@ A Home Assistant custom integration that exposes **Frank Energie** dynamic marke
 - [Configuration](#configuration)
 - [Sensors created](#sensors-created)
   - [Sensor overview](#sensor-overview)
-  - [Price block attributes](#price-block-attributes)
   - [Cheapest / most expensive sensors](#cheapest--most-expensive-sensors)
+  - [Price block attributes](#price-block-attributes)
 - [Tomorrow prices handling](#tomorrow-prices-handling)
 - [GraphQL API source](#graphql-api-source)
 - [EMS integration examples](#ems-integration-examples)
@@ -39,7 +39,7 @@ A Home Assistant custom integration that exposes **Frank Energie** dynamic marke
 - ⚡ **Quarter-hourly prices** — full 15-minute market price resolution (with automatic fallback to 60-minute data when that is what Frank publishes).
 - 📅 **Today & tomorrow** — both days fetched automatically; tomorrow's prices appear once published (typically around 15:00 CET).
 - 💶 **Current price sensor** — the active price slot, with the full price breakdown as attributes.
-- 📉 **Cheapest / most expensive** price + time sensors for **today** and **tomorrow**.
+- 📉 **Cheapest / most expensive** sensors for the **full day** today and tomorrow (price as state, time window in attributes).
 - 🗂️ **Full price arrays** for today and tomorrow exposed as sensor attributes — ideal as an EMS data source.
 - 🔁 **Resilient updates** — tomorrow data being unavailable never breaks the integration; it simply stays unavailable until published.
 - 🌍 **NL default with optional BE support** via the `x-country` header.
@@ -92,28 +92,47 @@ All entities are grouped under a single **Frank** device, so entity IDs take the
 
 ## Sensors created
 
-The integration creates exactly **12 entities**, scoped for EMS use.
+The integration creates exactly **8 entities**, scoped for EMS use.
+
+For each day the integration requests **all** electricity price blocks from Frank (local 00:00 → 24:00) and finds the single cheapest and single most-expensive block of that **full day**, at the raw resolution Frank returns (15-minute or hourly). No next-24h/48h windows, current-time-only filtering, future-only filtering, or hourly averaging is used.
 
 ### Sensor overview
 
 | Entity | Description | State | Unit |
 | --- | --- | --- | --- |
 | `sensor.frank_current_price` | Price of the currently active slot | `total_price_eur_kwh` | EUR/kWh |
+| `sensor.frank_cheapest_today` | Cheapest block of the full day today | `total_price_eur_kwh` | EUR/kWh |
+| `sensor.frank_most_expensive_today` | Most expensive block of the full day today | `total_price_eur_kwh` | EUR/kWh |
+| `sensor.frank_cheapest_tomorrow` | Cheapest block of the full day tomorrow | `total_price_eur_kwh` | EUR/kWh |
+| `sensor.frank_most_expensive_tomorrow` | Most expensive block of the full day tomorrow | `total_price_eur_kwh` | EUR/kWh |
 | `sensor.frank_prices_today` | Number of price blocks today (full array in attributes) | count | blocks |
 | `sensor.frank_prices_tomorrow` | Number of price blocks tomorrow (full array in attributes) | count | blocks |
-| `sensor.frank_cheapest_price_today` | Cheapest block price today | `total_price_eur_kwh` | EUR/kWh |
-| `sensor.frank_cheapest_time_today` | Cheapest block time window today | `HH:MM - HH:MM` | — |
-| `sensor.frank_most_expensive_price_today` | Most expensive block price today | `total_price_eur_kwh` | EUR/kWh |
-| `sensor.frank_most_expensive_time_today` | Most expensive block time window today | `HH:MM - HH:MM` | — |
-| `sensor.frank_cheapest_price_tomorrow` | Cheapest block price tomorrow | `total_price_eur_kwh` | EUR/kWh |
-| `sensor.frank_cheapest_time_tomorrow` | Cheapest block time window tomorrow | `HH:MM - HH:MM` | — |
-| `sensor.frank_most_expensive_price_tomorrow` | Most expensive block price tomorrow | `total_price_eur_kwh` | EUR/kWh |
-| `sensor.frank_most_expensive_time_tomorrow` | Most expensive block time window tomorrow | `HH:MM - HH:MM` | — |
 | `binary_sensor.frank_tomorrow_prices_available` | Whether tomorrow's prices are published | on/off | — |
+
+### Cheapest / most expensive sensors
+
+The four cheapest/most-expensive sensors each have:
+
+- **State:** the block's `total_price_eur_kwh` (EUR/kWh).
+- **Attributes:**
+  - `time` — the block window as `"HH:MM - HH:MM"` (e.g. `"13:45 - 14:00"`),
+  - `start` — the block start as a local ISO datetime,
+  - `end` — the block end as a local ISO datetime,
+  - `duration_minutes` — the block length (15 or 60),
+  - `full_block` — the complete price breakdown.
+
+Example:
+
+```text
+sensor.frank_cheapest_today = 0.0735     # EUR/kWh
+  attribute time = "13:45 - 14:00"
+```
+
+The `*_tomorrow` sensors stay **unavailable** until Frank publishes tomorrow's prices.
 
 ### Price block attributes
 
-The current-price and cheapest/most-expensive **price** sensors expose the **full price block** as attributes:
+The `full_block` attribute (and each entry of the `prices` arrays) has the form:
 
 ```yaml
 from: "2026-06-13T14:00:00+02:00"
@@ -127,16 +146,7 @@ total_price_eur_kwh: 0.21682
 per_unit: "kWh"
 ```
 
-The `sensor.frank_prices_today` and `sensor.frank_prices_tomorrow` sensors expose the **complete array** of price blocks in their `prices` attribute, along with `resolution_minutes`, `cheapest_block`, `most_expensive_block`, `average_price`, `min_price` and `max_price`. This makes them a convenient single source for an EMS to plan against.
-
-### Cheapest / most expensive sensors
-
-For each day there is a matched pair:
-
-- a **price** sensor (`*_price_today` / `*_price_tomorrow`) whose state is the block price in EUR/kWh, with the full block as attributes;
-- a **time** sensor (`*_time_today` / `*_time_tomorrow`) whose state is the block window as `HH:MM - HH:MM`, with `price`, `start`, `end`, `duration_minutes` and `full_block` as attributes.
-
-The `*_tomorrow` sensors stay **unavailable** until Frank publishes tomorrow's prices.
+The `sensor.frank_prices_today` and `sensor.frank_prices_tomorrow` sensors expose the **complete array** of price blocks for the full day in their `prices` attribute, along with `resolution_minutes`, `cheapest_block`, `most_expensive_block`, `average_price`, `min_price` and `max_price`. This makes them the convenient single source for an EMS to plan against.
 
 ---
 
@@ -187,7 +197,7 @@ Requests use a 30-second timeout and are retried up to 3 times. Invalid records 
 
 ## EMS integration examples
 
-Use the cheapest/most-expensive windows to drive an Energy Management System, charging, or heavy appliances. The cheapest/most-expensive **time** sensors expose `start` and `end` attributes (ISO datetimes) that are convenient for scheduling.
+Use the cheapest/most-expensive windows to drive an Energy Management System, charging, or heavy appliances. Each cheapest/most-expensive sensor exposes `start` and `end` attributes (ISO datetimes) that are convenient for scheduling.
 
 **Charge an EV during the cheapest block today:**
 
@@ -197,8 +207,8 @@ automation:
     trigger:
       - platform: template
         value_template: >
-          {{ now() >= state_attr('sensor.frank_cheapest_time_today', 'start') | as_datetime
-             and now() < state_attr('sensor.frank_cheapest_time_today', 'end') | as_datetime }}
+          {{ now() >= state_attr('sensor.frank_cheapest_today', 'start') | as_datetime
+             and now() < state_attr('sensor.frank_cheapest_today', 'end') | as_datetime }}
     action:
       - service: switch.turn_on
         target:
@@ -213,8 +223,8 @@ automation:
     trigger:
       - platform: template
         value_template: >
-          {{ now() >= state_attr('sensor.frank_most_expensive_time_today', 'start') | as_datetime
-             and now() < state_attr('sensor.frank_most_expensive_time_today', 'end') | as_datetime }}
+          {{ now() >= state_attr('sensor.frank_most_expensive_today', 'start') | as_datetime
+             and now() < state_attr('sensor.frank_most_expensive_today', 'end') | as_datetime }}
     action:
       - service: switch.turn_off
         target:
@@ -252,7 +262,7 @@ automation:
 **Time until the cheapest block today:**
 
 ```yaml
-{% set start = state_attr('sensor.frank_cheapest_time_today', 'start') | as_datetime %}
+{% set start = state_attr('sensor.frank_cheapest_today', 'start') | as_datetime %}
 {% if start %}
   {{ (start - now()).total_seconds() // 60 }} minutes
 {% else %}
@@ -275,7 +285,7 @@ automation:
 
 ```yaml
 {% if is_state('binary_sensor.frank_tomorrow_prices_available', 'on') %}
-  {{ states('sensor.frank_cheapest_price_tomorrow') }} €/kWh
+  {{ states('sensor.frank_cheapest_tomorrow') }} €/kWh
 {% else %}
   Tomorrow's prices not published yet
 {% endif %}

@@ -20,12 +20,22 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 # Definitions for the cheapest / most expensive sensors.
-# Each tuple is: (base_key, label, coordinator helper, is_tomorrow).
+# Each tuple is: (key, label, coordinator helper, is_tomorrow).
 _EXTREMUM_DEFINITIONS: tuple[tuple[str, str, str, bool], ...] = (
-    ("cheapest", "Cheapest", "get_cheapest_today", False),
-    ("most_expensive", "Most expensive", "get_most_expensive_today", False),
-    ("cheapest", "Cheapest", "get_cheapest_tomorrow", True),
-    ("most_expensive", "Most expensive", "get_most_expensive_tomorrow", True),
+    ("cheapest_today", "Cheapest today", "get_cheapest_today", False),
+    (
+        "most_expensive_today",
+        "Most expensive today",
+        "get_most_expensive_today",
+        False,
+    ),
+    ("cheapest_tomorrow", "Cheapest tomorrow", "get_cheapest_tomorrow", True),
+    (
+        "most_expensive_tomorrow",
+        "Most expensive tomorrow",
+        "get_most_expensive_tomorrow",
+        True,
+    ),
 )
 
 
@@ -80,27 +90,9 @@ async def async_setup_entry(
         FrankPricesTomorrowSensor(coordinator),
     ]
 
-    for base_key, label, method_name, is_tomorrow in _EXTREMUM_DEFINITIONS:
-        day = "tomorrow" if is_tomorrow else "today"
-        price_key = f"{base_key}_price_{day}"
-        time_key = f"{base_key}_time_{day}"
+    for key, label, method_name, is_tomorrow in _EXTREMUM_DEFINITIONS:
         entities.append(
-            FrankBlockPriceSensor(
-                coordinator,
-                price_key,
-                f"{label} price {day}",
-                method_name,
-                is_tomorrow,
-            )
-        )
-        entities.append(
-            FrankBlockTimeSensor(
-                coordinator,
-                time_key,
-                f"{label} time {day}",
-                method_name,
-                is_tomorrow,
-            )
+            FrankBlockSensor(coordinator, key, label, method_name, is_tomorrow)
         )
 
     async_add_entities(entities)
@@ -221,8 +213,15 @@ class FrankPricesTomorrowSensor(FrankQuarterPricesEntity, SensorEntity):
         }
 
 
-class FrankBlockSensorBase(FrankQuarterPricesEntity, SensorEntity):
-    """Base for sensors derived from a single coordinator price block."""
+class FrankBlockSensor(FrankQuarterPricesEntity, SensorEntity):
+    """Sensor exposing the cheapest/most expensive price block of a full day.
+
+    The state is the block's total price in EUR/kWh. The block's local time
+    window and full price breakdown are exposed as attributes.
+    """
+
+    _attr_device_class = SensorDeviceClass.MONETARY
+    _attr_native_unit_of_measurement = "EUR/kWh"
 
     def __init__(
         self,
@@ -254,25 +253,6 @@ class FrankBlockSensorBase(FrankQuarterPricesEntity, SensorEntity):
             return False
         return self._block() is not None
 
-    def _block_attributes(self) -> dict[str, Any]:
-        """Shared start/end/duration/full_block attributes for a block."""
-        block = self._block()
-        if block is None:
-            return {}
-        return {
-            "start": _hhmm(block.get("from")),
-            "end": _hhmm(block.get("till")),
-            "duration_minutes": block.get("duration_minutes"),
-            "full_block": _full_block(block),
-        }
-
-
-class FrankBlockPriceSensor(FrankBlockSensorBase):
-    """Sensor exposing the total price of a price block."""
-
-    _attr_device_class = SensorDeviceClass.MONETARY
-    _attr_native_unit_of_measurement = "EUR/kWh"
-
     @property
     def native_value(self) -> float | None:
         """Return the total price of the block."""
@@ -283,25 +263,20 @@ class FrankBlockPriceSensor(FrankBlockSensorBase):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return start, end, duration and the full price block."""
-        return self._block_attributes()
-
-
-class FrankBlockTimeSensor(FrankBlockSensorBase):
-    """Sensor exposing the local time range of a price block."""
-
-    @property
-    def native_value(self) -> str | None:
-        """Return the block's local time range as ``HH:MM - HH:MM``."""
-        return _time_range(self._block())
-
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        """Return price, start, end, duration and the full price block."""
+        """Return time range, start, end, duration and the full price block."""
         block = self._block()
         if block is None:
             return {}
+        start = block.get("from")
+        till = block.get("till")
         return {
-            "price": block.get("total_price_eur_kwh"),
-            **self._block_attributes(),
+            "time": _time_range(block),
+            "start": dt_util.as_local(start).isoformat()
+            if isinstance(start, datetime)
+            else None,
+            "end": dt_util.as_local(till).isoformat()
+            if isinstance(till, datetime)
+            else None,
+            "duration_minutes": block.get("duration_minutes"),
+            "full_block": _full_block(block),
         }
