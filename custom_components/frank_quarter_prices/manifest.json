@@ -1,0 +1,12 @@
+{
+  "domain": "frank_quarter_prices",
+  "name": "Frank Quarter Prices",
+  "codeowners": ["@Bennie-JC"],
+  "config_flow": true,
+  "documentation": "https://github.com/Bennie-JC/ha-frank-quarter-prices",
+  "integration_type": "service",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/Bennie-JC/ha-frank-quarter-prices/issues",
+  "requirements": [],
+  "version": "0.1.0"
+}

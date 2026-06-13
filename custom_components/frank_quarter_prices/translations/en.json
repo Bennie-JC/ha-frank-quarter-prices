@@ -1,0 +1,124 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Frank Quarter Prices",
+        "description": "Enter your Frank API credentials.",
+        "data": {
+          "api_token": "API token",
+          "site_reference": "Site reference"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect",
+      "invalid_auth": "Invalid authentication",
+      "unknown": "Unexpected error"
+    },
+    "abort": {
+      "already_configured": "This account is already configured"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "current_electricity_price": {
+        "name": "Current electricity price"
+      },
+      "prices_today": {
+        "name": "Prices today"
+      },
+      "prices_tomorrow": {
+        "name": "Prices tomorrow"
+      },
+      "cheapest_price_today": {
+        "name": "Cheapest price today"
+      },
+      "cheapest_price_today_start": {
+        "name": "Cheapest price today start"
+      },
+      "cheapest_price_today_end": {
+        "name": "Cheapest price today end"
+      },
+      "most_expensive_price_today": {
+        "name": "Most expensive price today"
+      },
+      "most_expensive_price_today_start": {
+        "name": "Most expensive price today start"
+      },
+      "most_expensive_price_today_end": {
+        "name": "Most expensive price today end"
+      },
+      "cheapest_price_tomorrow": {
+        "name": "Cheapest price tomorrow"
+      },
+      "cheapest_price_tomorrow_start": {
+        "name": "Cheapest price tomorrow start"
+      },
+      "cheapest_price_tomorrow_end": {
+        "name": "Cheapest price tomorrow end"
+      },
+      "most_expensive_price_tomorrow": {
+        "name": "Most expensive price tomorrow"
+      },
+      "most_expensive_price_tomorrow_start": {
+        "name": "Most expensive price tomorrow start"
+      },
+      "most_expensive_price_tomorrow_end": {
+        "name": "Most expensive price tomorrow end"
+      },
+      "cheapest_price_next_24h": {
+        "name": "Cheapest price next 24h"
+      },
+      "cheapest_price_next_24h_start": {
+        "name": "Cheapest price next 24h start"
+      },
+      "cheapest_price_next_24h_end": {
+        "name": "Cheapest price next 24h end"
+      },
+      "most_expensive_price_next_24h": {
+        "name": "Most expensive price next 24h"
+      },
+      "most_expensive_price_next_24h_start": {
+        "name": "Most expensive price next 24h start"
+      },
+      "most_expensive_price_next_24h_end": {
+        "name": "Most expensive price next 24h end"
+      },
+      "cheapest_price_next_48h": {
+        "name": "Cheapest price next 48h"
+      },
+      "cheapest_price_next_48h_start": {
+        "name": "Cheapest price next 48h start"
+      },
+      "cheapest_price_next_48h_end": {
+        "name": "Cheapest price next 48h end"
+      },
+      "most_expensive_price_next_48h": {
+        "name": "Most expensive price next 48h"
+      },
+      "most_expensive_price_next_48h_start": {
+        "name": "Most expensive price next 48h start"
+      },
+      "most_expensive_price_next_48h_end": {
+        "name": "Most expensive price next 48h end"
+      },
+      "apex_24h_quarter": {
+        "name": "ApexCharts 24h quarter"
+      },
+      "apex_48h_quarter": {
+        "name": "ApexCharts 48h quarter"
+      },
+      "apex_24h_hourly": {
+        "name": "ApexCharts 24h hourly"
+      },
+      "apex_48h_hourly": {
+        "name": "ApexCharts 48h hourly"
+      }
+    },
+    "binary_sensor": {
+      "tomorrow_prices_available": {
+        "name": "Tomorrow prices available"
+      }
+    }
+  }
+}
