@@ -29,3 +29,7 @@ DEFAULT_SCAN_INTERVAL: Final = timedelta(minutes=15)
 
 # Default integration title used in the config flow.
 DEFAULT_NAME: Final = "Frank Quarter Prices"
+
+# Device name. Kept short ("Frank") so entity ids become e.g.
+# ``sensor.frank_current_price`` instead of a long device-name prefix.
+DEVICE_NAME: Final = "Frank"

@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 import logging
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.util import dt as dt_util
 
 from .coordinator import FrankQuarterPricesCoordinator
 from .entity import FrankQuarterPricesEntity
@@ -17,41 +19,51 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 
-# Attribute keys copied directly from a price block onto the current price sensor.
-_PRICE_BLOCK_ATTRS = (
-    "from",
-    "till",
-    "duration_minutes",
-    "market_price",
-    "market_price_tax",
-    "sourcing_markup_price",
-    "energy_tax_price",
-    "total_price_eur_kwh",
-    "per_unit",
+# Definitions for the cheapest / most expensive sensors.
+# Each tuple is: (base_key, label, coordinator helper, is_tomorrow).
+_EXTREMUM_DEFINITIONS: tuple[tuple[str, str, str, bool], ...] = (
+    ("cheapest", "Cheapest", "get_cheapest_today", False),
+    ("most_expensive", "Most expensive", "get_most_expensive_today", False),
+    ("cheapest", "Cheapest", "get_cheapest_tomorrow", True),
+    ("most_expensive", "Most expensive", "get_most_expensive_tomorrow", True),
 )
 
-# Definitions for the extremum (cheapest / most expensive) sensors.
-# Each tuple is: (key, coordinator helper method name).
-_EXTREMUM_DEFINITIONS: tuple[tuple[str, str], ...] = (
-    ("cheapest_price_today", "get_cheapest_today"),
-    ("most_expensive_price_today", "get_most_expensive_today"),
-    ("cheapest_price_tomorrow", "get_cheapest_tomorrow"),
-    ("most_expensive_price_tomorrow", "get_most_expensive_tomorrow"),
-    ("cheapest_price_next_24h", "get_cheapest_next_24h"),
-    ("most_expensive_price_next_24h", "get_most_expensive_next_24h"),
-    ("cheapest_price_next_48h", "get_cheapest_next_48h"),
-    ("most_expensive_price_next_48h", "get_most_expensive_next_48h"),
-)
 
-# Definitions for the ApexCharts series sensors.
-# Each tuple is: (key, coordinator helper method name, span_hours, resolution).
-# ``resolution`` is "source" to keep the original resolution, or "hourly".
-_APEX_DEFINITIONS: tuple[tuple[str, str, int, str], ...] = (
-    ("apex_24h_quarter", "get_apex_24h_quarter", 24, "source"),
-    ("apex_48h_quarter", "get_apex_48h_quarter", 48, "source"),
-    ("apex_24h_hourly", "get_apex_24h_hourly", 24, "hourly"),
-    ("apex_48h_hourly", "get_apex_48h_hourly", 48, "hourly"),
-)
+def _hhmm(value: Any) -> str | None:
+    """Format a datetime as a local ``HH:MM`` string."""
+    if not isinstance(value, datetime):
+        return None
+    return dt_util.as_local(value).strftime("%H:%M")
+
+
+def _time_range(block: dict[str, Any] | None) -> str | None:
+    """Return a human readable ``HH:MM - HH:MM`` local time range."""
+    if block is None:
+        return None
+    start = _hhmm(block.get("from"))
+    end = _hhmm(block.get("till"))
+    if start is None or end is None:
+        return None
+    return f"{start} - {end}"
+
+
+def _full_block(block: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Return a serializable copy of a price block with local ISO times."""
+    if block is None:
+        return None
+    full = dict(block)
+    start = block.get("from")
+    till = block.get("till")
+    if isinstance(start, datetime):
+        full["from"] = dt_util.as_local(start).isoformat()
+    if isinstance(till, datetime):
+        full["till"] = dt_util.as_local(till).isoformat()
+    return full
+
+
+def _serialize_prices(prices: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Serialize a list of price blocks for use in attributes."""
+    return [b for b in (_full_block(p) for p in prices) if b is not None]
 
 
 async def async_setup_entry(
@@ -68,14 +80,27 @@ async def async_setup_entry(
         FrankPricesTomorrowSensor(coordinator),
     ]
 
-    for key, method_name in _EXTREMUM_DEFINITIONS:
-        entities.append(FrankBlockPriceSensor(coordinator, key, method_name))
-        entities.append(FrankBlockBoundarySensor(coordinator, key, method_name, "from"))
-        entities.append(FrankBlockBoundarySensor(coordinator, key, method_name, "till"))
-
-    for key, method_name, span_hours, resolution in _APEX_DEFINITIONS:
+    for base_key, label, method_name, is_tomorrow in _EXTREMUM_DEFINITIONS:
+        day = "tomorrow" if is_tomorrow else "today"
+        price_key = f"{base_key}_price_{day}"
+        time_key = f"{base_key}_time_{day}"
         entities.append(
-            FrankApexSensor(coordinator, key, method_name, span_hours, resolution)
+            FrankBlockPriceSensor(
+                coordinator,
+                price_key,
+                f"{label} price {day}",
+                method_name,
+                is_tomorrow,
+            )
+        )
+        entities.append(
+            FrankBlockTimeSensor(
+                coordinator,
+                time_key,
+                f"{label} time {day}",
+                method_name,
+                is_tomorrow,
+            )
         )
 
     async_add_entities(entities)
@@ -84,13 +109,12 @@ async def async_setup_entry(
 class FrankCurrentPriceSensor(FrankQuarterPricesEntity, SensorEntity):
     """Sensor exposing the current electricity price."""
 
-    _attr_translation_key = "current_electricity_price"
     _attr_device_class = SensorDeviceClass.MONETARY
     _attr_native_unit_of_measurement = "EUR/kWh"
 
     def __init__(self, coordinator: FrankQuarterPricesCoordinator) -> None:
         """Initialize the current price sensor."""
-        super().__init__(coordinator, "current_electricity_price")
+        super().__init__(coordinator, "current_price", "Current price")
 
     @property
     def native_value(self) -> float | None:
@@ -99,11 +123,16 @@ class FrankCurrentPriceSensor(FrankQuarterPricesEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return attributes from the currently active price block."""
+        """Return start/end/duration and the full active price block."""
         block = self._current_block()
         if block is None:
             return {}
-        return {key: block.get(key) for key in _PRICE_BLOCK_ATTRS}
+        return {
+            "start": _hhmm(block.get("from")),
+            "end": _hhmm(block.get("till")),
+            "duration_minutes": block.get("duration_minutes"),
+            "full_block": _full_block(block),
+        }
 
     def _current_block(self) -> dict[str, Any] | None:
         """Return the price block matching the current time slot."""
@@ -122,12 +151,11 @@ class FrankCurrentPriceSensor(FrankQuarterPricesEntity, SensorEntity):
 class FrankPricesTodaySensor(FrankQuarterPricesEntity, SensorEntity):
     """Sensor exposing the number of price blocks for today."""
 
-    _attr_translation_key = "prices_today"
     _attr_native_unit_of_measurement = "blocks"
 
     def __init__(self, coordinator: FrankQuarterPricesCoordinator) -> None:
         """Initialize the prices-today sensor."""
-        super().__init__(coordinator, "prices_today")
+        super().__init__(coordinator, "prices_today", "Prices today")
 
     @property
     def native_value(self) -> int:
@@ -136,37 +164,37 @@ class FrankPricesTodaySensor(FrankQuarterPricesEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return today's prices and summary blocks."""
+        """Return today's prices, summary blocks and statistics."""
         data = self.coordinator.data or {}
+        prices = data.get("today", [])
         return {
-            "prices": data.get("today", []),
+            "prices": _serialize_prices(prices),
             "resolution_minutes": data.get("resolution_minutes"),
-            "cheapest_block": self.coordinator.get_cheapest_today(),
-            "most_expensive_block": self.coordinator.get_most_expensive_today(),
+            "cheapest_block": _full_block(self.coordinator.get_cheapest_today()),
+            "most_expensive_block": _full_block(
+                self.coordinator.get_most_expensive_today()
+            ),
+            "average_price": self.coordinator.average_price(prices),
+            "min_price": self.coordinator.min_price(prices),
+            "max_price": self.coordinator.max_price(prices),
         }
 
 
 class FrankPricesTomorrowSensor(FrankQuarterPricesEntity, SensorEntity):
     """Sensor exposing the number of price blocks for tomorrow."""
 
-    _attr_translation_key = "prices_tomorrow"
     _attr_native_unit_of_measurement = "blocks"
 
     def __init__(self, coordinator: FrankQuarterPricesCoordinator) -> None:
         """Initialize the prices-tomorrow sensor."""
-        super().__init__(coordinator, "prices_tomorrow")
+        super().__init__(coordinator, "prices_tomorrow", "Prices tomorrow")
 
     @property
     def available(self) -> bool:
-        """Return availability.
-
-        Unavailable when tomorrow's prices are not available and no cached
-        tomorrow data exists.
-        """
+        """Return availability; unavailable until tomorrow's prices are published."""
         if not super().available:
             return False
-        data = self.coordinator.data or {}
-        return bool(data.get("tomorrow_available")) or bool(data.get("tomorrow"))
+        return bool((self.coordinator.data or {}).get("tomorrow_available"))
 
     @property
     def native_value(self) -> int:
@@ -175,14 +203,21 @@ class FrankPricesTomorrowSensor(FrankQuarterPricesEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return tomorrow's prices and summary blocks."""
+        """Return tomorrow's prices, summary blocks and statistics."""
         data = self.coordinator.data or {}
+        prices = data.get("tomorrow", [])
         return {
-            "prices": data.get("tomorrow", []),
+            "prices": _serialize_prices(prices),
             "available": bool(data.get("tomorrow_available")),
             "resolution_minutes": data.get("resolution_minutes"),
-            "cheapest_block": self.coordinator.get_cheapest_tomorrow(),
-            "most_expensive_block": self.coordinator.get_most_expensive_tomorrow(),
+            "cheapest_block": _full_block(self.coordinator.get_cheapest_tomorrow()),
+            "most_expensive_block": _full_block(
+                self.coordinator.get_most_expensive_tomorrow()
+            ),
+            "average_price": self.coordinator.average_price(prices),
+            "min_price": self.coordinator.min_price(prices),
+            "max_price": self.coordinator.max_price(prices),
+            "last_attempt": data.get("last_attempt"),
         }
 
 
@@ -193,11 +228,14 @@ class FrankBlockSensorBase(FrankQuarterPricesEntity, SensorEntity):
         self,
         coordinator: FrankQuarterPricesCoordinator,
         key: str,
+        name: str,
         method_name: str,
+        is_tomorrow: bool,
     ) -> None:
         """Initialize the block-based sensor."""
-        super().__init__(coordinator, key)
+        super().__init__(coordinator, key, name)
         self._method_name = method_name
+        self._is_tomorrow = is_tomorrow
 
     def _block(self) -> dict[str, Any] | None:
         """Resolve the price block via the coordinator helper method."""
@@ -207,15 +245,26 @@ class FrankBlockSensorBase(FrankQuarterPricesEntity, SensorEntity):
     @property
     def available(self) -> bool:
         """Return True only when a price block is available."""
-        return super().available and self._block() is not None
+        if not super().available:
+            return False
+        # Tomorrow-based sensors are unavailable until tomorrow is published.
+        if self._is_tomorrow and not (self.coordinator.data or {}).get(
+            "tomorrow_available"
+        ):
+            return False
+        return self._block() is not None
 
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        """Return the full price block as attributes."""
+    def _block_attributes(self) -> dict[str, Any]:
+        """Shared start/end/duration/full_block attributes for a block."""
         block = self._block()
         if block is None:
             return {}
-        return {key: block.get(key) for key in _PRICE_BLOCK_ATTRS}
+        return {
+            "start": _hhmm(block.get("from")),
+            "end": _hhmm(block.get("till")),
+            "duration_minutes": block.get("duration_minutes"),
+            "full_block": _full_block(block),
+        }
 
 
 class FrankBlockPriceSensor(FrankBlockSensorBase):
@@ -223,16 +272,6 @@ class FrankBlockPriceSensor(FrankBlockSensorBase):
 
     _attr_device_class = SensorDeviceClass.MONETARY
     _attr_native_unit_of_measurement = "EUR/kWh"
-
-    def __init__(
-        self,
-        coordinator: FrankQuarterPricesCoordinator,
-        key: str,
-        method_name: str,
-    ) -> None:
-        """Initialize the price sensor."""
-        super().__init__(coordinator, key, method_name)
-        self._attr_translation_key = key
 
     @property
     def native_value(self) -> float | None:
@@ -242,84 +281,27 @@ class FrankBlockPriceSensor(FrankBlockSensorBase):
             return None
         return block.get("total_price_eur_kwh")
 
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return start, end, duration and the full price block."""
+        return self._block_attributes()
 
-class FrankBlockBoundarySensor(FrankBlockSensorBase):
-    """Sensor exposing the start or end datetime of a price block."""
 
-    def __init__(
-        self,
-        coordinator: FrankQuarterPricesCoordinator,
-        key: str,
-        method_name: str,
-        boundary: str,
-    ) -> None:
-        """Initialize the boundary sensor.
-
-        ``boundary`` is either ``"from"`` (start) or ``"till"`` (end).
-        """
-        suffix = "start" if boundary == "from" else "end"
-        super().__init__(coordinator, f"{key}_{suffix}", method_name)
-        self._boundary = boundary
-        self._attr_translation_key = f"{key}_{suffix}"
+class FrankBlockTimeSensor(FrankBlockSensorBase):
+    """Sensor exposing the local time range of a price block."""
 
     @property
     def native_value(self) -> str | None:
-        """Return the boundary datetime as an ISO 8601 string."""
-        block = self._block()
-        if block is None:
-            return None
-        value = block.get(self._boundary)
-        return value.isoformat() if value is not None else None
-
-
-class FrankApexSensor(FrankQuarterPricesEntity, SensorEntity):
-    """Sensor exposing an ApexCharts-ready price series.
-
-    State is the number of datapoints. The ``data`` attribute holds the series
-    as ``[[timestamp_ms, price], ...]``.
-    """
-
-    _attr_native_unit_of_measurement = "points"
-
-    def __init__(
-        self,
-        coordinator: FrankQuarterPricesCoordinator,
-        key: str,
-        method_name: str,
-        span_hours: int,
-        resolution: str,
-    ) -> None:
-        """Initialize the ApexCharts sensor."""
-        super().__init__(coordinator, key)
-        self._method_name = method_name
-        self._span_hours = span_hours
-        self._resolution = resolution
-        self._attr_translation_key = key
-
-    def _series(self) -> list[list[Any]]:
-        """Resolve the ApexCharts series via the coordinator helper method."""
-        getter = getattr(self.coordinator, self._method_name)
-        return getter()
-
-    @property
-    def native_value(self) -> int:
-        """Return the number of datapoints in the series."""
-        return len(self._series())
+        """Return the block's local time range as ``HH:MM - HH:MM``."""
+        return _time_range(self._block())
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return the ApexCharts series and metadata."""
-        data = self.coordinator.data or {}
-        # "hourly" resolution reflects the aggregated output; "source" keeps
-        # the coordinator's detected resolution (15 or 60 minutes).
-        if self._resolution == "hourly":
-            resolution = 60
-        else:
-            resolution = data.get("resolution_minutes")
+        """Return price, start, end, duration and the full price block."""
+        block = self._block()
+        if block is None:
+            return {}
         return {
-            "data": self._series(),
-            "span_hours": self._span_hours,
-            "resolution": resolution,
-            "generated_at": data.get("last_update"),
-            "tomorrow_available": bool(data.get("tomorrow_available")),
+            "price": block.get("total_price_eur_kwh"),
+            **self._block_attributes(),
         }

@@ -5,9 +5,9 @@
 [![License](https://img.shields.io/github/license/Bennie-JC/ha-frank-quarter-prices)](LICENSE)
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2025.1%2B-blue.svg)](https://www.home-assistant.io/)
 
-A Home Assistant custom integration that exposes **Frank Energie** dynamic market electricity prices — including **quarter-hourly (15-minute)** resolution — as rich sensors, ready for automation, energy management systems (EMS) and beautiful [ApexCharts](https://github.com/RomRider/apexcharts-card) dashboards.
+A Home Assistant custom integration that exposes **Frank Energie** dynamic market electricity prices — including **quarter-hourly (15-minute)** resolution — as a compact set of sensors, designed as a clean **price source for an Energy Management System (EMS)**.
 
-> The integration polls the public Frank Energie GraphQL API every 15 minutes and provides today's and tomorrow's prices, cheapest/most-expensive windows, and chart-ready data series.
+> The integration polls the public Frank Energie GraphQL API every 15 minutes and provides today's and tomorrow's prices, the current price, and the cheapest/most-expensive windows for each day. The full price arrays are available as sensor attributes for your EMS logic.
 
 ---
 
@@ -20,13 +20,11 @@ A Home Assistant custom integration that exposes **Frank Energie** dynamic marke
 - [Configuration](#configuration)
 - [Sensors created](#sensors-created)
   - [Sensor overview](#sensor-overview)
-  - [Cheapest price sensors](#cheapest-price-sensors)
-  - [Most expensive price sensors](#most-expensive-price-sensors)
-  - [ApexCharts sensors](#apexcharts-sensors)
+  - [Price block attributes](#price-block-attributes)
+  - [Cheapest / most expensive sensors](#cheapest--most-expensive-sensors)
 - [Tomorrow prices handling](#tomorrow-prices-handling)
 - [GraphQL API source](#graphql-api-source)
 - [EMS integration examples](#ems-integration-examples)
-- [Example ApexCharts cards](#example-apexcharts-cards)
 - [Example Home Assistant templates](#example-home-assistant-templates)
 - [Troubleshooting](#troubleshooting)
 - [FAQ](#faq)
@@ -41,9 +39,9 @@ A Home Assistant custom integration that exposes **Frank Energie** dynamic marke
 - ⚡ **Quarter-hourly prices** — full 15-minute market price resolution (with automatic fallback to 60-minute data when that is what Frank publishes).
 - 📅 **Today & tomorrow** — both days fetched automatically; tomorrow's prices appear once published (typically around 15:00 CET).
 - 💶 **Current price sensor** — the active price slot, with the full price breakdown as attributes.
-- 📉 **Cheapest / most expensive** sensors for **today**, **tomorrow**, the **next 24h** and the **next 48h**, each with start/end time sensors.
-- 📈 **ApexCharts-ready** data series sensors (24h/48h, quarter & hourly aggregation).
-- 🔁 **Resilient updates** — tomorrow data being unavailable never breaks the integration; the last known values are retained.
+- 📉 **Cheapest / most expensive** price + time sensors for **today** and **tomorrow**.
+- 🗂️ **Full price arrays** for today and tomorrow exposed as sensor attributes — ideal as an EMS data source.
+- 🔁 **Resilient updates** — tomorrow data being unavailable never breaks the integration; it simply stays unavailable until published.
 - 🌍 **NL default with optional BE support** via the `x-country` header.
 - 🛠️ **Diagnostics support** for easy troubleshooting (secrets redacted).
 - 🧩 Built on Home Assistant's `DataUpdateCoordinator` and config entries, following modern (2025+) best practices.
@@ -88,46 +86,34 @@ Configuration is done entirely through the UI (config flow).
 2. Search for **Frank Quarter Prices**.
 3. Follow the prompts and submit.
 
-All entities are grouped under a single **Frank Quarter Prices** device.
-
-> **Note on entity IDs:** Home Assistant derives entity IDs from the device and entity names. Depending on your setup, the entities may be named e.g. `sensor.frank_quarter_prices_current_electricity_price`. The examples in this README use the short form `sensor.frank_current_electricity_price` for readability — adjust them to match the entity IDs in **Developer Tools → States** on your system, or rename the entities to the short form.
+All entities are grouped under a single **Frank** device, so entity IDs take the short form `sensor.frank_<name>` (for example `sensor.frank_current_price`). The examples in this README use those IDs directly — you can confirm them in **Developer Tools → States** on your system.
 
 ---
 
 ## Sensors created
 
+The integration creates exactly **12 entities**, scoped for EMS use.
+
 ### Sensor overview
 
 | Entity | Description | State | Unit |
 | --- | --- | --- | --- |
-| `sensor.frank_current_electricity_price` | Price of the currently active slot | `total_price_eur_kwh` | EUR/kWh |
-| `sensor.frank_prices_today` | Number of price blocks today | count | blocks |
-| `sensor.frank_prices_tomorrow` | Number of price blocks tomorrow | count | blocks |
-| `sensor.frank_cheapest_price_today` | Cheapest block today | `total_price_eur_kwh` | EUR/kWh |
-| `sensor.frank_cheapest_price_today_start` | Start of cheapest block today | ISO datetime | — |
-| `sensor.frank_cheapest_price_today_end` | End of cheapest block today | ISO datetime | — |
-| `sensor.frank_most_expensive_price_today` | Most expensive block today | `total_price_eur_kwh` | EUR/kWh |
-| `sensor.frank_most_expensive_price_today_start` | Start of most expensive block today | ISO datetime | — |
-| `sensor.frank_most_expensive_price_today_end` | End of most expensive block today | ISO datetime | — |
-| `sensor.frank_cheapest_price_tomorrow` | Cheapest block tomorrow | `total_price_eur_kwh` | EUR/kWh |
-| `sensor.frank_cheapest_price_tomorrow_start` | Start of cheapest block tomorrow | ISO datetime | — |
-| `sensor.frank_cheapest_price_tomorrow_end` | End of cheapest block tomorrow | ISO datetime | — |
-| `sensor.frank_most_expensive_price_tomorrow` | Most expensive block tomorrow | `total_price_eur_kwh` | EUR/kWh |
-| `sensor.frank_most_expensive_price_tomorrow_start` | Start of most expensive block tomorrow | ISO datetime | — |
-| `sensor.frank_most_expensive_price_tomorrow_end` | End of most expensive block tomorrow | ISO datetime | — |
-| `sensor.frank_cheapest_price_next_24h` | Cheapest block in the next 24h (from now) | `total_price_eur_kwh` | EUR/kWh |
-| `sensor.frank_most_expensive_price_next_24h` | Most expensive block in the next 24h (from now) | `total_price_eur_kwh` | EUR/kWh |
-| `sensor.frank_cheapest_price_next_48h` | Cheapest block across today + tomorrow | `total_price_eur_kwh` | EUR/kWh |
-| `sensor.frank_most_expensive_price_next_48h` | Most expensive block across today + tomorrow | `total_price_eur_kwh` | EUR/kWh |
-| `sensor.frank_apex_24h_quarter` | ApexCharts series, next 24h, source resolution | datapoint count | points |
-| `sensor.frank_apex_48h_quarter` | ApexCharts series, next 48h, source resolution | datapoint count | points |
-| `sensor.frank_apex_24h_hourly` | ApexCharts series, next 24h, hourly average | datapoint count | points |
-| `sensor.frank_apex_48h_hourly` | ApexCharts series, next 48h, hourly average | datapoint count | points |
+| `sensor.frank_current_price` | Price of the currently active slot | `total_price_eur_kwh` | EUR/kWh |
+| `sensor.frank_prices_today` | Number of price blocks today (full array in attributes) | count | blocks |
+| `sensor.frank_prices_tomorrow` | Number of price blocks tomorrow (full array in attributes) | count | blocks |
+| `sensor.frank_cheapest_price_today` | Cheapest block price today | `total_price_eur_kwh` | EUR/kWh |
+| `sensor.frank_cheapest_time_today` | Cheapest block time window today | `HH:MM - HH:MM` | — |
+| `sensor.frank_most_expensive_price_today` | Most expensive block price today | `total_price_eur_kwh` | EUR/kWh |
+| `sensor.frank_most_expensive_time_today` | Most expensive block time window today | `HH:MM - HH:MM` | — |
+| `sensor.frank_cheapest_price_tomorrow` | Cheapest block price tomorrow | `total_price_eur_kwh` | EUR/kWh |
+| `sensor.frank_cheapest_time_tomorrow` | Cheapest block time window tomorrow | `HH:MM - HH:MM` | — |
+| `sensor.frank_most_expensive_price_tomorrow` | Most expensive block price tomorrow | `total_price_eur_kwh` | EUR/kWh |
+| `sensor.frank_most_expensive_time_tomorrow` | Most expensive block time window tomorrow | `HH:MM - HH:MM` | — |
 | `binary_sensor.frank_tomorrow_prices_available` | Whether tomorrow's prices are published | on/off | — |
 
-> The `next_24h` cheapest/most-expensive sensors also expose `_start` and `_end` companion sensors.
+### Price block attributes
 
-Every price/cheapest/most-expensive sensor exposes the **full price block** as attributes:
+The current-price and cheapest/most-expensive **price** sensors expose the **full price block** as attributes:
 
 ```yaml
 from: "2026-06-13T14:00:00+02:00"
@@ -141,49 +127,16 @@ total_price_eur_kwh: 0.21682
 per_unit: "kWh"
 ```
 
-### Cheapest price sensors
+The `sensor.frank_prices_today` and `sensor.frank_prices_tomorrow` sensors expose the **complete array** of price blocks in their `prices` attribute, along with `resolution_minutes`, `cheapest_block`, `most_expensive_block`, `average_price`, `min_price` and `max_price`. This makes them a convenient single source for an EMS to plan against.
 
-Find the lowest price window and act on it:
+### Cheapest / most expensive sensors
 
-- `sensor.frank_cheapest_price_today` — cheapest slot for the rest of today's published prices.
-- `sensor.frank_cheapest_price_tomorrow` — cheapest slot tomorrow (once published).
-- `sensor.frank_cheapest_price_next_24h` — cheapest slot in the next 24 hours from **now** (future-only).
-- `sensor.frank_cheapest_price_next_48h` — cheapest slot across today and tomorrow.
+For each day there is a matched pair:
 
-Each comes with `_start` / `_end` sensors returning ISO datetime strings, ideal for scheduling.
+- a **price** sensor (`*_price_today` / `*_price_tomorrow`) whose state is the block price in EUR/kWh, with the full block as attributes;
+- a **time** sensor (`*_time_today` / `*_time_tomorrow`) whose state is the block window as `HH:MM - HH:MM`, with `price`, `start`, `end`, `duration_minutes` and `full_block` as attributes.
 
-### Most expensive price sensors
-
-Avoid the peaks:
-
-- `sensor.frank_most_expensive_price_today`
-- `sensor.frank_most_expensive_price_tomorrow`
-- `sensor.frank_most_expensive_price_next_24h`
-- `sensor.frank_most_expensive_price_next_48h`
-
-Also with `_start` / `_end` companions.
-
-### ApexCharts sensors
-
-These sensors expose chart-ready data in the `data` attribute as an array of `[timestamp_ms, price]` pairs:
-
-```yaml
-data:
-  - [1749816000000, 0.21682]
-  - [1749816900000, 0.20114]
-  # ...
-span_hours: 48
-resolution: 15        # 60 for the *_hourly sensors
-generated_at: "2026-06-13T14:02:00+02:00"
-tomorrow_available: true
-```
-
-| Sensor | Window | Resolution |
-| --- | --- | --- |
-| `sensor.frank_apex_24h_quarter` | Next 24h | Source (15m or 60m) |
-| `sensor.frank_apex_48h_quarter` | Next 48h | Source (15m or 60m) |
-| `sensor.frank_apex_24h_hourly` | Next 24h | Hourly average |
-| `sensor.frank_apex_48h_hourly` | Next 48h | Hourly average |
+The `*_tomorrow` sensors stay **unavailable** until Frank publishes tomorrow's prices.
 
 ---
 
@@ -194,7 +147,7 @@ Frank Energie publishes the next day's prices during the afternoon (typically ar
 - Tomorrow's prices are **always attempted** on every update.
 - If they are **not yet available**, the integration:
   - keeps `binary_sensor.frank_tomorrow_prices_available` **off**,
-  - retains the **last known** tomorrow data if it exists, otherwise an empty list,
+  - leaves the `*_tomorrow` sensors **unavailable**,
   - logs an **info** message only — it never raises an error or marks the integration as failed.
 - Once published, `binary_sensor.frank_tomorrow_prices_available` turns **on** and the tomorrow sensors populate.
 
@@ -234,7 +187,7 @@ Requests use a 30-second timeout and are retried up to 3 times. Invalid records 
 
 ## EMS integration examples
 
-Use the cheapest/most-expensive windows to drive an Energy Management System, charging, or heavy appliances.
+Use the cheapest/most-expensive windows to drive an Energy Management System, charging, or heavy appliances. The cheapest/most-expensive **time** sensors expose `start` and `end` attributes (ISO datetimes) that are convenient for scheduling.
 
 **Charge an EV during the cheapest block today:**
 
@@ -244,8 +197,8 @@ automation:
     trigger:
       - platform: template
         value_template: >
-          {{ now() >= states('sensor.frank_cheapest_price_today_start') | as_datetime
-             and now() < states('sensor.frank_cheapest_price_today_end') | as_datetime }}
+          {{ now() >= state_attr('sensor.frank_cheapest_time_today', 'start') | as_datetime
+             and now() < state_attr('sensor.frank_cheapest_time_today', 'end') | as_datetime }}
     action:
       - service: switch.turn_on
         target:
@@ -260,8 +213,8 @@ automation:
     trigger:
       - platform: template
         value_template: >
-          {{ now() >= states('sensor.frank_most_expensive_price_today_start') | as_datetime
-             and now() < states('sensor.frank_most_expensive_price_today_end') | as_datetime }}
+          {{ now() >= state_attr('sensor.frank_most_expensive_time_today', 'start') | as_datetime
+             and now() < state_attr('sensor.frank_most_expensive_time_today', 'end') | as_datetime }}
     action:
       - service: switch.turn_off
         target:
@@ -275,10 +228,10 @@ automation:
   - alias: "Heat water when price is low"
     trigger:
       - platform: state
-        entity_id: sensor.frank_current_electricity_price
+        entity_id: sensor.frank_current_price
     condition:
       - condition: numeric_state
-        entity_id: sensor.frank_current_electricity_price
+        entity_id: sensor.frank_current_price
         below: 0.15
     action:
       - service: switch.turn_on
@@ -288,62 +241,18 @@ automation:
 
 ---
 
-## Example ApexCharts cards
-
-Requires the [apexcharts-card](https://github.com/RomRider/apexcharts-card) custom Lovelace card.
-
-**48h quarter-hourly price chart:**
-
-```yaml
-type: custom:apexcharts-card
-header:
-  show: true
-  title: Frank Energie — Next 48h (15 min)
-graph_span: 48h
-span:
-  start: hour
-series:
-  - entity: sensor.frank_apex_48h_quarter
-    name: Price
-    type: column
-    unit: €/kWh
-    data_generator: |
-      return entity.attributes.data.map((point) => {
-        return [point[0], point[1]];
-      });
-```
-
-**24h hourly average with current price line:**
-
-```yaml
-type: custom:apexcharts-card
-header:
-  show: true
-  title: Frank Energie — Next 24h (hourly)
-graph_span: 24h
-series:
-  - entity: sensor.frank_apex_24h_hourly
-    name: Hourly average
-    type: area
-    unit: €/kWh
-    data_generator: |
-      return entity.attributes.data.map((p) => [p[0], p[1]]);
-```
-
----
-
 ## Example Home Assistant templates
 
 **Show the current price nicely formatted:**
 
 ```yaml
-{{ states('sensor.frank_current_electricity_price') | float(0) | round(4) }} €/kWh
+{{ states('sensor.frank_current_price') | float(0) | round(4) }} €/kWh
 ```
 
 **Time until the cheapest block today:**
 
 ```yaml
-{% set start = states('sensor.frank_cheapest_price_today_start') | as_datetime %}
+{% set start = state_attr('sensor.frank_cheapest_time_today', 'start') | as_datetime %}
 {% if start %}
   {{ (start - now()).total_seconds() // 60 }} minutes
 {% else %}
@@ -354,10 +263,9 @@ series:
 **Is the current price below today's average?**
 
 ```yaml
-{% set prices = state_attr('sensor.frank_prices_today', 'prices') %}
-{% if prices %}
-  {% set avg = (prices | map(attribute='total_price_eur_kwh') | sum) / (prices | length) %}
-  {{ states('sensor.frank_current_electricity_price') | float(0) < avg }}
+{% set avg = state_attr('sensor.frank_prices_today', 'average_price') %}
+{% if avg is not none %}
+  {{ states('sensor.frank_current_price') | float(0) < avg }}
 {% else %}
   unknown
 {% endif %}
@@ -410,7 +318,7 @@ Quarter-hourly (15-minute) where Frank publishes it; the integration automatical
 Every 15 minutes via a `DataUpdateCoordinator`.
 
 **Why is tomorrow empty in the morning?**
-Frank typically publishes next-day prices in the afternoon (~15:00 CET). The integration retains the last known values and never errors out in the meantime.
+Frank typically publishes next-day prices in the afternoon (~15:00 CET). The `*_tomorrow` sensors stay unavailable until then and the integration never errors out in the meantime.
 
 **Does it support Belgium?**
 Yes — Netherlands (NL) is the default; Belgian (BE) pricing is requested via the `x-country` header.

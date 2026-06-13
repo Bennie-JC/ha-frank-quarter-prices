@@ -34,11 +34,11 @@ class FrankTomorrowPricesAvailableBinarySensor(
 ):
     """Binary sensor indicating whether tomorrow's prices are available."""
 
-    _attr_translation_key = "tomorrow_prices_available"
-
     def __init__(self, coordinator: FrankQuarterPricesCoordinator) -> None:
         """Initialize the binary sensor."""
-        super().__init__(coordinator, "tomorrow_prices_available")
+        super().__init__(
+            coordinator, "tomorrow_prices_available", "Tomorrow prices available"
+        )
 
     @property
     def is_on(self) -> bool:

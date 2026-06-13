@@ -34,8 +34,6 @@ class FrankQuarterPricesCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Initialize the coordinator."""
         self.client = client
         self.entry = entry
-        # Cache of the last successfully fetched tomorrow prices.
-        self._last_tomorrow: list[dict[str, Any]] = []
 
         super().__init__(
             hass,
@@ -46,7 +44,7 @@ class FrankQuarterPricesCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
 
     async def _async_update_data(self) -> dict[str, Any]:
-        """Fetch today's and tomorrow's quarter prices from the Frank API."""
+        """Fetch today's and tomorrow's prices from the Frank API."""
         now = dt_util.now()
         today = now.date()
         tomorrow = today + timedelta(days=1)
@@ -59,32 +57,26 @@ class FrankQuarterPricesCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         except FrankClientError as err:
             raise UpdateFailed(f"Error communicating with Frank API: {err}") from err
 
-        today_prices: list[dict[str, Any]] = today_result.get("prices", [])
+        today_prices = self._filter_for_day(today_result.get("prices", []), today)
 
-        # 2. Always attempt tomorrow. Failures here are non-fatal.
+        # 2. Always attempt tomorrow. Failures here are non-fatal: tomorrow's
+        #    prices are typically only published after ~15:00 local time.
         tomorrow_prices: list[dict[str, Any]] = []
         tomorrow_available = False
         try:
             tomorrow_result = await self.client.async_get_prices_for_date(tomorrow)
-            tomorrow_prices = tomorrow_result.get("prices", [])
+            tomorrow_prices = self._filter_for_day(
+                tomorrow_result.get("prices", []), tomorrow
+            )
         except FrankClientError as err:
-            # Tomorrow's prices may not be published yet (typically before ~15:00).
             _LOGGER.info("Tomorrow's prices are not available yet: %s", err)
             tomorrow_prices = []
 
         if tomorrow_prices:
             tomorrow_available = True
-            self._last_tomorrow = tomorrow_prices
         else:
-            # 3. Keep last valid tomorrow data if we have it, else empty list.
-            if self._last_tomorrow:
-                _LOGGER.info(
-                    "Tomorrow's prices unavailable; keeping last known values"
-                )
-                tomorrow_prices = self._last_tomorrow
-            else:
-                _LOGGER.info("Tomorrow's prices unavailable; using empty list")
-                tomorrow_prices = []
+            _LOGGER.info("Tomorrow's prices not available yet")
+            tomorrow_prices = []
 
         resolution_minutes = self._detect_resolution(today_prices or tomorrow_prices)
         current_price = self._determine_current_price(today_prices, now)
@@ -96,7 +88,21 @@ class FrankQuarterPricesCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "current_price": current_price,
             "resolution_minutes": resolution_minutes,
             "last_update": now,
+            "last_attempt": now,
         }
+
+    @staticmethod
+    def _filter_for_day(
+        prices: list[dict[str, Any]], day: Any
+    ) -> list[dict[str, Any]]:
+        """Keep only blocks whose local start falls on the given calendar day."""
+        result: list[dict[str, Any]] = []
+        for block in prices:
+            start = block.get("from")
+            if isinstance(start, datetime) and dt_util.as_local(start).date() == day:
+                result.append(block)
+        return result
+
 
     @staticmethod
     def _detect_resolution(prices: list[dict[str, Any]]) -> int:
@@ -171,108 +177,34 @@ class FrankQuarterPricesCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Return the most expensive price block for tomorrow."""
         return self._max_by_total(self._tomorrow())
 
-    def get_cheapest_next_48h(self) -> dict[str, Any] | None:
-        """Return the cheapest price block across today and tomorrow."""
-        return self._min_by_total(self._today() + self._tomorrow())
-
-    def get_most_expensive_next_48h(self) -> dict[str, Any] | None:
-        """Return the most expensive price block across today and tomorrow."""
-        return self._max_by_total(self._today() + self._tomorrow())
-
-    # --- Future-window helpers --------------------------------------------
-
-    def _all_blocks(self) -> list[dict[str, Any]]:
-        """Return today's and tomorrow's blocks sorted by start time."""
-        blocks = self._today() + self._tomorrow()
-        return sorted(
-            (b for b in blocks if isinstance(b.get("from"), datetime)),
-            key=lambda b: b["from"],
-        )
-
-    def _future_blocks(self, hours: int) -> list[dict[str, Any]]:
-        """Return blocks active from now until ``now + hours``."""
-        now = dt_util.now()
-        end = now + timedelta(hours=hours)
-        result: list[dict[str, Any]] = []
-        for block in self._all_blocks():
-            start = block.get("from")
-            till = block.get("till")
-            if not isinstance(start, datetime) or not isinstance(till, datetime):
-                continue
-            # Include blocks that are currently active or start within the window.
-            if till > now and start < end:
-                result.append(block)
-        return result
-
-    def get_cheapest_next_24h(self) -> dict[str, Any] | None:
-        """Return the cheapest block in the next 24 hours from now."""
-        return self._min_by_total(self._future_blocks(24))
-
-    def get_most_expensive_next_24h(self) -> dict[str, Any] | None:
-        """Return the most expensive block in the next 24 hours from now."""
-        return self._max_by_total(self._future_blocks(24))
-
-    # --- ApexCharts helpers -----------------------------------------------
+    # --- Statistics helpers -----------------------------------------------
 
     @staticmethod
-    def _to_apex_series(blocks: list[dict[str, Any]]) -> list[list[Any]]:
-        """Convert price blocks into ``[timestamp_ms, price]`` pairs."""
-        series: list[list[Any]] = []
-        for block in blocks:
-            start = block.get("from")
-            price = block.get("total_price_eur_kwh")
-            if isinstance(start, datetime) and isinstance(price, (int, float)):
-                series.append([int(start.timestamp() * 1000), price])
-        return series
+    def _totals(prices: list[dict[str, Any]]) -> list[float]:
+        """Return the list of valid total prices."""
+        return [
+            p["total_price_eur_kwh"]
+            for p in prices
+            if isinstance(p.get("total_price_eur_kwh"), (int, float))
+        ]
 
-    def _aggregate_hourly(
-        self, blocks: list[dict[str, Any]]
-    ) -> list[dict[str, Any]]:
-        """Aggregate sub-hourly blocks into hourly average price blocks.
+    @classmethod
+    def average_price(cls, prices: list[dict[str, Any]]) -> float | None:
+        """Return the average total price of the given blocks."""
+        totals = cls._totals(prices)
+        if not totals:
+            return None
+        return round(sum(totals) / len(totals), 6)
 
-        If the source data is already hourly, it is returned unchanged.
-        """
-        if self.resolution_minutes >= 60:
-            return blocks
+    @classmethod
+    def min_price(cls, prices: list[dict[str, Any]]) -> float | None:
+        """Return the lowest total price of the given blocks."""
+        totals = cls._totals(prices)
+        return min(totals) if totals else None
 
-        buckets: dict[datetime, list[float]] = {}
-        for block in blocks:
-            start = block.get("from")
-            price = block.get("total_price_eur_kwh")
-            if not isinstance(start, datetime) or not isinstance(price, (int, float)):
-                continue
-            hour = start.replace(minute=0, second=0, microsecond=0)
-            buckets.setdefault(hour, []).append(price)
+    @classmethod
+    def max_price(cls, prices: list[dict[str, Any]]) -> float | None:
+        """Return the highest total price of the given blocks."""
+        totals = cls._totals(prices)
+        return max(totals) if totals else None
 
-        aggregated: list[dict[str, Any]] = []
-        for hour in sorted(buckets):
-            prices = buckets[hour]
-            aggregated.append(
-                {
-                    "from": hour,
-                    "till": hour + timedelta(hours=1),
-                    "total_price_eur_kwh": round(sum(prices) / len(prices), 6),
-                }
-            )
-        return aggregated
-
-    @property
-    def resolution_minutes(self) -> int:
-        """Return the detected resolution in minutes."""
-        return (self.data or {}).get("resolution_minutes", DEFAULT_RESOLUTION_MINUTES)
-
-    def get_apex_24h_quarter(self) -> list[list[Any]]:
-        """Return the next 24h of price blocks at the source resolution."""
-        return self._to_apex_series(self._future_blocks(24))
-
-    def get_apex_48h_quarter(self) -> list[list[Any]]:
-        """Return the next 48h of price blocks at the source resolution."""
-        return self._to_apex_series(self._future_blocks(48))
-
-    def get_apex_24h_hourly(self) -> list[list[Any]]:
-        """Return the next 24h of price blocks aggregated to hourly averages."""
-        return self._to_apex_series(self._aggregate_hourly(self._future_blocks(24)))
-
-    def get_apex_48h_hourly(self) -> list[list[Any]]:
-        """Return the next 48h of price blocks aggregated to hourly averages."""
-        return self._to_apex_series(self._aggregate_hourly(self._future_blocks(48)))

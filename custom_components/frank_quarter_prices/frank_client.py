@@ -217,13 +217,13 @@ class FrankClient:
 
     @staticmethod
     def _parse_datetime(value: Any) -> datetime | None:
-        """Parse an ISO 8601 datetime string into an aware datetime."""
+        """Parse an ISO 8601 datetime string into a local timezone-aware datetime."""
         if not isinstance(value, str) or not value:
             return None
         parsed = dt_util.parse_datetime(value)
         if parsed is None:
             return None
-        # Ensure the datetime is timezone-aware.
+        # Ensure the datetime is timezone-aware, then convert to HA local time.
         if parsed.tzinfo is None:
             parsed = parsed.replace(tzinfo=dt_util.UTC)
-        return parsed
+        return dt_util.as_local(parsed)
