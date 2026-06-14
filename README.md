@@ -256,8 +256,8 @@ Add a new **Manual** dashboard card and paste:
 ```yaml
 type: custom:config-template-card
 variables:
-  GREEN: states['sensor.frank_green_threshold'] ? states['sensor.frank_green_threshold'].state : 0.12
-  RED: states['sensor.frank_red_threshold'] ? states['sensor.frank_red_threshold'].state : 0.25
+  GREEN: "states['sensor.frank_green_threshold'] ? states['sensor.frank_green_threshold'].state : 0.12"
+  RED: "states['sensor.frank_red_threshold'] ? states['sensor.frank_red_threshold'].state : 0.25"
 entities:
   - sensor.frank_prices_today
 card:
@@ -327,8 +327,8 @@ Same style, reading `sensor.frank_prices_tomorrow`. The card stays empty until F
 ```yaml
 type: custom:config-template-card
 variables:
-  GREEN: states['sensor.frank_green_threshold'] ? states['sensor.frank_green_threshold'].state : 0.12
-  RED: states['sensor.frank_red_threshold'] ? states['sensor.frank_red_threshold'].state : 0.25
+  GREEN: "states['sensor.frank_green_threshold'] ? states['sensor.frank_green_threshold'].state : 0.12"
+  RED: "states['sensor.frank_red_threshold'] ? states['sensor.frank_red_threshold'].state : 0.25"
 entities:
   - sensor.frank_prices_tomorrow
 card:

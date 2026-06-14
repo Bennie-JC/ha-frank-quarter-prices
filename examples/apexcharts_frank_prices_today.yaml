@@ -14,8 +14,8 @@
 #   sensor.frank_red_threshold    (defaults to 0.25 if missing)
 type: custom:config-template-card
 variables:
-  GREEN: states['sensor.frank_green_threshold'] ? states['sensor.frank_green_threshold'].state : 0.12
-  RED: states['sensor.frank_red_threshold'] ? states['sensor.frank_red_threshold'].state : 0.25
+  GREEN: "states['sensor.frank_green_threshold'] ? states['sensor.frank_green_threshold'].state : 0.12"
+  RED: "states['sensor.frank_red_threshold'] ? states['sensor.frank_red_threshold'].state : 0.25"
 entities:
   - sensor.frank_prices_today
 card:

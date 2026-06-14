@@ -22,8 +22,8 @@
 # until then sensor.frank_prices_tomorrow is unavailable and the chart is empty.
 type: custom:config-template-card
 variables:
-  GREEN: states['sensor.frank_green_threshold'] ? states['sensor.frank_green_threshold'].state : 0.12
-  RED: states['sensor.frank_red_threshold'] ? states['sensor.frank_red_threshold'].state : 0.25
+  GREEN: "states['sensor.frank_green_threshold'] ? states['sensor.frank_green_threshold'].state : 0.12"
+  RED: "states['sensor.frank_red_threshold'] ? states['sensor.frank_red_threshold'].state : 0.25"
 entities:
   - sensor.frank_prices_tomorrow
 card:
