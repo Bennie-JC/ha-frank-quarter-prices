@@ -1,8 +1,8 @@
 # Frank Quarter Prices for Home Assistant
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-[![GitHub release](https://img.shields.io/github/v/release/Bennie-JC/ha-frank-quarter-prices?sort=semver&display_name=tag)](https://github.com/Bennie-JC/ha-frank-quarter-prices/releases/latest)
-[![License](https://img.shields.io/github/license/Bennie-JC/ha-frank-quarter-prices)](LICENSE)
+[![GitHub release](https://img.shields.io/badge/release-v0.1.1-blue.svg)](https://github.com/Bennie-JC/ha-frank-quarter-prices/releases/latest)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2025.1%2B-blue.svg)](https://www.home-assistant.io/)
 
 A Home Assistant custom integration that exposes **Frank Energie** dynamic market electricity prices — including **quarter-hourly (15-minute)** resolution — as a compact set of sensors, designed as a clean **price source for an Energy Management System (EMS)**.
