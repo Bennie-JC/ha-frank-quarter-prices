@@ -228,6 +228,8 @@ Requests use a 30-second timeout and are retried up to 3 times. Invalid records 
 
 You can visualize the prices as a color-coded bar chart — **one bar per price block**. When Frank returns native quarter-hour data you get **96 bars per day**; when only hourly data is available you get **24 bars**. The data is never aggregated.
 
+![Frank electricity price today — quarter-hour bars colored green/amber/red by price](images/apexcharts_today.png)
+
 ### Required frontend cards (HACS)
 
 Install both of these from **HACS → Frontend**:
