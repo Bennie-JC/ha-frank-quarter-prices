@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="160" viewBox="0 0 512 160" role="img" aria-label="Frank Quarter Prices">
+  <defs>
+    <linearGradient id="fqBgLogo" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1f8fff"/>
+      <stop offset="1" stop-color="#0b5cad"/>
+    </linearGradient>
+  </defs>
+  <!-- Mark -->
+  <g transform="translate(8,16)">
+    <rect x="0" y="0" width="128" height="128" rx="28" fill="url(#fqBgLogo)"/>
+    <circle cx="64" cy="64" r="42" fill="none" stroke="#ffffff" stroke-opacity="0.25" stroke-width="7"/>
+    <path d="M64 22 A42 42 0 0 1 106 64" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="round"/>
+    <path d="M70 30 L46 72 L62 72 L57 100 L84 60 L67 60 Z"
+          fill="#ffd23f" stroke="#0b5cad" stroke-width="2.5" stroke-linejoin="round"/>
+  </g>
+  <!-- Wordmark -->
+  <g font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif">
+    <text x="160" y="74" font-size="40" font-weight="700" fill="#0b5cad">Frank Quarter</text>
+    <text x="160" y="118" font-size="34" font-weight="500" fill="#1f8fff">Prices</text>
+  </g>
+</svg>

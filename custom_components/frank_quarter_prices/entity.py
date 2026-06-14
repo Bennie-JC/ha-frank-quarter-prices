@@ -30,8 +30,9 @@ class FrankQuarterPricesEntity(CoordinatorEntity[FrankQuarterPricesCoordinator])
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, coordinator.entry.entry_id)},
             name=DEVICE_NAME,
-            manufacturer="Frank Energie",
-            model="Quarter Prices",
+            manufacturer="Jouw Cloud B.V.",
+            model="Frank Energie Market Prices",
+            sw_version=coordinator.integration_version,
             entry_type=DeviceEntryType.SERVICE,
         )
 

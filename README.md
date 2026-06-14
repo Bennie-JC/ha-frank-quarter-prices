@@ -24,8 +24,10 @@ A Home Assistant custom integration that exposes **Frank Energie** dynamic marke
   - [Price block attributes](#price-block-attributes)
 - [Tomorrow prices handling](#tomorrow-prices-handling)
 - [GraphQL API source](#graphql-api-source)
+- [ApexCharts dashboard](#apexcharts-dashboard)
 - [EMS integration examples](#ems-integration-examples)
 - [Example Home Assistant templates](#example-home-assistant-templates)
+- [Brand assets (integration icon)](#brand-assets-integration-icon)
 - [Troubleshooting](#troubleshooting)
 - [FAQ](#faq)
 - [Contributing](#contributing)
@@ -222,6 +224,174 @@ Requests use a 30-second timeout and are retried up to 3 times. Invalid records 
 
 ---
 
+## ApexCharts dashboard
+
+You can visualize the prices as a color-coded bar chart — **one bar per price block**. When Frank returns native quarter-hour data you get **96 bars per day**; when only hourly data is available you get **24 bars**. The data is never aggregated.
+
+### Required frontend cards (HACS)
+
+Install both of these from **HACS → Frontend**:
+
+- **ApexCharts Card** — `RomRider/apexcharts-card`
+- **Config Template Card** — `iantrich/config-template-card`
+
+After installing, reload your browser (or clear the frontend cache) so the new card types are available.
+
+### How it works
+
+- The chart reads the **`prices`** attribute of `sensor.frank_prices_today` (or `sensor.frank_prices_tomorrow`).
+- Each entry in `attributes.prices` is rendered individually using its **`from`** timestamp (x-axis) and **`total_price_eur_kwh`** value (y-axis).
+- Because each bar carries its own timestamp, quarter-hour blocks plot at `00:00`, `00:15`, `00:30`, … exactly as returned — no hourly rounding.
+- The three **color thresholds** (green → amber → red) can be adjusted manually in the YAML, or driven by optional `input_number` helpers (`sensor.frank_green_threshold` / `sensor.frank_red_threshold`); the examples fall back to `0.12` and `0.25 €/kWh` when those helpers don't exist.
+
+Ready-to-use files are in [examples/](examples/):
+
+- [examples/apexcharts_frank_prices_today.yaml](examples/apexcharts_frank_prices_today.yaml)
+- [examples/apexcharts_frank_prices_tomorrow.yaml](examples/apexcharts_frank_prices_tomorrow.yaml)
+
+### Today chart
+
+Add a new **Manual** dashboard card and paste:
+
+```yaml
+type: custom:config-template-card
+variables:
+  GREEN: states['sensor.frank_green_threshold'] ? states['sensor.frank_green_threshold'].state : 0.12
+  RED: states['sensor.frank_red_threshold'] ? states['sensor.frank_red_threshold'].state : 0.25
+entities:
+  - sensor.frank_prices_today
+card:
+  type: custom:apexcharts-card
+  graph_span: 24h
+  span:
+    start: day
+  now:
+    show: true
+    label: Now
+  experimental:
+    color_threshold: true
+  header:
+    show: true
+    title: Frank electricity price today (€/kWh)
+  apex_config:
+    chart:
+      height: 320
+    legend:
+      show: false
+    yaxis:
+      min: 0
+      decimalsInFloat: 3
+      labels:
+        formatter: |
+          EVAL:function(val){ return "€ " + val.toFixed(3); }
+    tooltip:
+      x:
+        format: dd MMM HH:mm
+      "y":
+        formatter: |
+          EVAL:function(val){ return "€ " + val.toFixed(3) + " /kWh"; }
+    dataLabels:
+      enabled: false
+    plotOptions:
+      bar:
+        columnWidth: 70%
+        borderRadius: 2
+  series:
+    - entity: sensor.frank_prices_today
+      name: Price
+      type: column
+      stroke_width: 0
+      float_precision: 5
+      color_threshold:
+        - value: 0
+          color: "#43a047"
+        - value: ${Number(GREEN)}
+          color: "#ffa600"
+        - value: ${Number(RED)}
+          color: "#db4437"
+      data_generator: |
+        return (entity.attributes.prices || [])
+          .filter(r => r && r.from && r.total_price_eur_kwh !== null && r.total_price_eur_kwh !== undefined)
+          .map(r => {
+            const p = Number(String(r.total_price_eur_kwh).replace(',', '.'));
+            return [new Date(r.from), isNaN(p) ? null : p];
+          });
+```
+
+### Tomorrow chart
+
+Same style, reading `sensor.frank_prices_tomorrow`. The card stays empty until Frank publishes tomorrow's prices (≈15:00 CET).
+
+> **Note on the span:** `apexcharts-card` has no reliable "tomorrow" span offset. The chart relies on the `data_generator`, which emits real timestamps from `attributes.prices`, so each bar plots at its correct absolute time regardless of the configured window. `span.offset: +24h` is included as a hint; if your version of the card ignores it, the bars still render at the right times because every point carries its own `from` datetime.
+
+```yaml
+type: custom:config-template-card
+variables:
+  GREEN: states['sensor.frank_green_threshold'] ? states['sensor.frank_green_threshold'].state : 0.12
+  RED: states['sensor.frank_red_threshold'] ? states['sensor.frank_red_threshold'].state : 0.25
+entities:
+  - sensor.frank_prices_tomorrow
+card:
+  type: custom:apexcharts-card
+  graph_span: 24h
+  span:
+    start: day
+    offset: +24h
+  now:
+    show: true
+    label: Now
+  experimental:
+    color_threshold: true
+  header:
+    show: true
+    title: Frank electricity price tomorrow (€/kWh)
+  apex_config:
+    chart:
+      height: 320
+    legend:
+      show: false
+    yaxis:
+      min: 0
+      decimalsInFloat: 3
+      labels:
+        formatter: |
+          EVAL:function(val){ return "€ " + val.toFixed(3); }
+    tooltip:
+      x:
+        format: dd MMM HH:mm
+      "y":
+        formatter: |
+          EVAL:function(val){ return "€ " + val.toFixed(3) + " /kWh"; }
+    dataLabels:
+      enabled: false
+    plotOptions:
+      bar:
+        columnWidth: 70%
+        borderRadius: 2
+  series:
+    - entity: sensor.frank_prices_tomorrow
+      name: Price
+      type: column
+      stroke_width: 0
+      float_precision: 5
+      color_threshold:
+        - value: 0
+          color: "#43a047"
+        - value: ${Number(GREEN)}
+          color: "#ffa600"
+        - value: ${Number(RED)}
+          color: "#db4437"
+      data_generator: |
+        return (entity.attributes.prices || [])
+          .filter(r => r && r.from && r.total_price_eur_kwh !== null && r.total_price_eur_kwh !== undefined)
+          .map(r => {
+            const p = Number(String(r.total_price_eur_kwh).replace(',', '.'));
+            return [new Date(r.from), isNaN(p) ? null : p];
+          });
+```
+
+---
+
 ## EMS integration examples
 
 Use the cheapest/most-expensive windows to drive an Energy Management System, charging, or heavy appliances. Each cheapest/most-expensive sensor exposes `timestamp` and `end_timestamp` attributes (local ISO datetimes) that are convenient for scheduling.
@@ -317,6 +487,29 @@ automation:
   Tomorrow's prices not published yet
 {% endif %}
 ```
+
+---
+
+## Brand assets (integration icon)
+
+This integration ships neutral, self-made icon and logo artwork (an electricity bolt over a quarter-hour clock, in a cloud-blue style) under [custom_components/frank_quarter_prices/icons/](custom_components/frank_quarter_prices/icons/):
+
+- `icon.svg` — square app-style mark
+- `logo.svg` — wordmark
+
+These deliberately **do not** use the official Frank Energie logo or any trademarked assets.
+
+> **Heads-up:** Home Assistant loads integration icons from the central [home-assistant/brands](https://github.com/home-assistant/brands) repository, **not** from files inside a custom integration. Until this integration is added to Brands, Home Assistant may show a generic placeholder or *"icon not available"*. This is cosmetic and does not affect functionality.
+
+### Adding the icon to Home Assistant Brands (future PR)
+
+To make the icon appear natively, submit the artwork to the Brands repository:
+
+1. Convert the SVGs to PNG: `icon.png` (256×256) and `icon@2x.png` (512×512); optionally `logo.png` / `logo@2x.png`.
+2. Fork [home-assistant/brands](https://github.com/home-assistant/brands).
+3. Place the files under `custom_integrations/frank_quarter_prices/`.
+4. Open a PR following the [Brands contribution guidelines](https://github.com/home-assistant/brands#guidelines) (PNG, transparent background, trimmed, correct sizes).
+5. Once merged, Home Assistant will display the icon automatically for the `frank_quarter_prices` domain.
 
 ---
 

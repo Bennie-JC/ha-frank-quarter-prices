@@ -6,6 +6,7 @@ import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.loader import async_get_integration
 
 from .const import CONF_COUNTRY, DEFAULT_COUNTRY, DOMAIN, PLATFORMS
 from .coordinator import FrankQuarterPricesCoordinator
@@ -28,6 +29,10 @@ async def async_setup_entry(
     )
     client = FrankClient(hass=hass, entry=entry, country=country)
     coordinator = FrankQuarterPricesCoordinator(hass=hass, entry=entry, client=client)
+
+    # Expose the integration version as the device sw_version.
+    integration = await async_get_integration(hass, DOMAIN)
+    coordinator.integration_version = str(integration.version or "unknown")
 
     # Fetch initial data so we have data when entities are added.
     await coordinator.async_config_entry_first_refresh()

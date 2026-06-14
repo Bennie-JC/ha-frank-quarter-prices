@@ -1,0 +1,76 @@
+# Frank Quarter Prices — ApexCharts "today" chart
+#
+# Renders every price block from sensor.frank_prices_today individually using
+# the block's `from` timestamp and `total_price_eur_kwh` value. When Frank
+# returns native quarter-hour data you get 96 bars; when only hourly data is
+# available you get 24 bars. The data is NEVER aggregated.
+#
+# Required HACS frontend cards:
+#   - apexcharts-card        (RomRider/apexcharts-card)
+#   - config-template-card   (iantrich/config-template-card)
+#
+# Optional helper entities for the color thresholds (input_number):
+#   sensor.frank_green_threshold  (defaults to 0.12 if missing)
+#   sensor.frank_red_threshold    (defaults to 0.25 if missing)
+type: custom:config-template-card
+variables:
+  GREEN: states['sensor.frank_green_threshold'] ? states['sensor.frank_green_threshold'].state : 0.12
+  RED: states['sensor.frank_red_threshold'] ? states['sensor.frank_red_threshold'].state : 0.25
+entities:
+  - sensor.frank_prices_today
+card:
+  type: custom:apexcharts-card
+  graph_span: 24h
+  span:
+    start: day
+  now:
+    show: true
+    label: Now
+  experimental:
+    color_threshold: true
+  header:
+    show: true
+    title: Frank electricity price today (€/kWh)
+  apex_config:
+    chart:
+      height: 320
+    legend:
+      show: false
+    yaxis:
+      min: 0
+      decimalsInFloat: 3
+      labels:
+        formatter: |
+          EVAL:function(val){ return "€ " + val.toFixed(3); }
+    tooltip:
+      x:
+        format: dd MMM HH:mm
+      "y":
+        formatter: |
+          EVAL:function(val){ return "€ " + val.toFixed(3) + " /kWh"; }
+    dataLabels:
+      enabled: false
+    plotOptions:
+      bar:
+        columnWidth: 70%
+        borderRadius: 2
+  series:
+    - entity: sensor.frank_prices_today
+      name: Price
+      type: column
+      stroke_width: 0
+      float_precision: 5
+      color_threshold:
+        - value: 0
+          color: "#43a047"
+        - value: ${Number(GREEN)}
+          color: "#ffa600"
+        - value: ${Number(RED)}
+          color: "#db4437"
+      data_generator: |
+        return (entity.attributes.prices || [])
+          .filter(r => r && r.from && r.total_price_eur_kwh !== null && r.total_price_eur_kwh !== undefined)
+          .map(r => {
+            const p = Number(String(r.total_price_eur_kwh).replace(',', '.'));
+            return [new Date(r.from), isNaN(p) ? null : p];
+          });

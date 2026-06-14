@@ -1,0 +1,85 @@
+# Frank Quarter Prices — ApexCharts "tomorrow" chart
+#
+# Identical in style to the "today" chart but reads sensor.frank_prices_tomorrow.
+# Each price block is rendered individually from its `from` timestamp and
+# `total_price_eur_kwh` value (96 bars for quarter-hour data, 24 for hourly).
+# The data is NEVER aggregated.
+#
+# NOTE ON SPAN:
+#   apexcharts-card's `span.start` does not support a reliable "tomorrow" offset.
+#   We therefore rely entirely on the `data_generator`, which emits real
+#   timestamps from attributes.prices, so the bars are plotted at their correct
+#   absolute times regardless of the configured span. `span.offset: 24h` is set
+#   as a hint so the visible window aligns with the next day; if your version of
+#   apexcharts-card does not honour it, the bars still render at the correct
+#   timestamps because each point carries its own `from` datetime.
+#
+# Required HACS frontend cards:
+#   - apexcharts-card        (RomRider/apexcharts-card)
+#   - config-template-card   (iantrich/config-template-card)
+#
+# Tomorrow's prices are only available after Frank publishes them (≈15:00 CET);
+# until then sensor.frank_prices_tomorrow is unavailable and the chart is empty.
+type: custom:config-template-card
+variables:
+  GREEN: states['sensor.frank_green_threshold'] ? states['sensor.frank_green_threshold'].state : 0.12
+  RED: states['sensor.frank_red_threshold'] ? states['sensor.frank_red_threshold'].state : 0.25
+entities:
+  - sensor.frank_prices_tomorrow
+card:
+  type: custom:apexcharts-card
+  graph_span: 24h
+  span:
+    start: day
+    offset: +24h
+  now:
+    show: true
+    label: Now
+  experimental:
+    color_threshold: true
+  header:
+    show: true
+    title: Frank electricity price tomorrow (€/kWh)
+  apex_config:
+    chart:
+      height: 320
+    legend:
+      show: false
+    yaxis:
+      min: 0
+      decimalsInFloat: 3
+      labels:
+        formatter: |
+          EVAL:function(val){ return "€ " + val.toFixed(3); }
+    tooltip:
+      x:
+        format: dd MMM HH:mm
+      "y":
+        formatter: |
+          EVAL:function(val){ return "€ " + val.toFixed(3) + " /kWh"; }
+    dataLabels:
+      enabled: false
+    plotOptions:
+      bar:
+        columnWidth: 70%
+        borderRadius: 2
+  series:
+    - entity: sensor.frank_prices_tomorrow
+      name: Price
+      type: column
+      stroke_width: 0
+      float_precision: 5
+      color_threshold:
+        - value: 0
+          color: "#43a047"
+        - value: ${Number(GREEN)}
+          color: "#ffa600"
+        - value: ${Number(RED)}
+          color: "#db4437"
+      data_generator: |
+        return (entity.attributes.prices || [])
+          .filter(r => r && r.from && r.total_price_eur_kwh !== null && r.total_price_eur_kwh !== undefined)
+          .map(r => {
+            const p = Number(String(r.total_price_eur_kwh).replace(',', '.'));
+            return [new Date(r.from), isNaN(p) ? null : p];
+          });

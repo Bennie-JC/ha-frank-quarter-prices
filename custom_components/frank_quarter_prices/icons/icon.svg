@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-label="Frank Quarter Prices">
+  <defs>
+    <linearGradient id="fqBg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1f8fff"/>
+      <stop offset="1" stop-color="#0b5cad"/>
+    </linearGradient>
+  </defs>
+  <!-- Rounded square background (neutral cloud-blue, not a trademarked logo) -->
+  <rect x="8" y="8" width="240" height="240" rx="52" fill="url(#fqBg)"/>
+  <!-- Quarter-hour clock: full ring with one highlighted quarter arc -->
+  <circle cx="128" cy="128" r="78" fill="none" stroke="#ffffff" stroke-opacity="0.25" stroke-width="12"/>
+  <!-- Highlighted quarter (from 12 o'clock to 3 o'clock) -->
+  <path d="M128 50 A78 78 0 0 1 206 128" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+  <!-- Lightning bolt (electricity) -->
+  <path d="M140 64 L96 140 L124 140 L116 192 L164 116 L136 116 Z"
+        fill="#ffd23f" stroke="#0b5cad" stroke-width="4" stroke-linejoin="round"/>
+</svg>

@@ -34,6 +34,9 @@ class FrankQuarterPricesCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Initialize the coordinator."""
         self.client = client
         self.entry = entry
+        # Integration version (e.g. "0.1.1"), populated during setup and exposed
+        # as the device ``sw_version``. Falls back to "unknown" if not set.
+        self.integration_version: str = "unknown"
 
         super().__init__(
             hass,
