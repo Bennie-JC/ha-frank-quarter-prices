@@ -5,6 +5,25 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] - 2026-06-21
+
+### Added
+
+- Dutch translation file (`translations/nl.json`) for the config flow.
+- GitHub Actions workflows: Hassfest validation, HACS validation, and Ruff lint.
+- `country` key in `hacs.json` (`["NL", "BE"]`) for HACS Default inclusion.
+- Brands-ready PNG assets documented in the README for the Home Assistant Brands submission.
+
+### Changed
+
+- README fully translated to Dutch and optimized for SEO (Frank Energie, kwartierprijzen, EMS, batterijoptimalisatie).
+- Clarified the integration delivers **quarter-hour (15-minute) prices**, never hourly prices (hourly is only a fallback).
+
+### Fixed
+
+- Removed the unsupported `domains` key from `hacs.json` so HACS manifest validation passes.
+- Documented the exact fix for the *"icon not available"* entry in the Home Assistant integration list (Home Assistant Brands submission).
+
 ## [0.1.1] - 2026-06-14
 
 ### Added

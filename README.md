@@ -499,24 +499,26 @@ automation:
 
 ## Merkmateriaal (integratie-icoon)
 
-Deze integratie wordt geleverd met neutraal, zelfgemaakt icoon- en logomateriaal (een bliksemschicht voor een kwartierklok, in een wolkblauwe stijl) onder [custom_components/frank_quarter_prices/icons/](custom_components/frank_quarter_prices/icons/):
+Deze integratie wordt geleverd met neutraal, zelfgemaakt icoon- en logomateriaal (een bliksemschicht voor een kwartierklok, in een wolkblauwe stijl). De **kant-en-klare PNG-bestanden** staan onder [custom_components/frank_quarter_prices/brand/](custom_components/frank_quarter_prices/brand/) en voldoen exact aan de eisen van de Brands-repository:
 
-- `icon.svg` — vierkant app-achtig logo
-- `logo.svg` — woordmerk
+- `icon.png` — 256×256
+- `icon@2x.png` — 512×512
+- `logo.png` — 256×256
+- `logo@2x.png` — 512×512
 
-Deze gebruiken bewust **niet** het officiële Frank Energie-logo of enig handelsmerk.
+De bewerkbare bronbestanden (SVG) staan onder [custom_components/frank_quarter_prices/icons/](custom_components/frank_quarter_prices/icons/) (`icon.svg`, `logo.svg`). Al dit materiaal gebruikt bewust **niet** het officiële Frank Energie-logo of enig handelsmerk.
 
-> **Let op:** Home Assistant laadt integratie-iconen uit de centrale [home-assistant/brands](https://github.com/home-assistant/brands) repository, **niet** uit bestanden binnen een custom component. Totdat deze integratie aan Brands is toegevoegd, kan Home Assistant een generieke tijdelijke afbeelding of *"icon not available"* tonen. Dit is cosmetisch en heeft geen invloed op de werking.
+> **Waarom toont de integratielijst soms *"icon not available"*?** Home Assistant laadt integratie-iconen uitsluitend uit de centrale [home-assistant/brands](https://github.com/home-assistant/brands) repository (`https://brands.home-assistant.io/`), **niet** uit bestanden binnen een custom component. Het icoon kan al correct op de integratiekaart van HACS verschijnen (HACS leest de map `brand/`), terwijl de **integratielijst** van Home Assistant nog *"icon not available"* toont totdat het domein `frank_quarter_prices` is opgenomen in de Brands-repository. Dit is puur cosmetisch en heeft geen invloed op de werking.
 
-### Het icoon toevoegen aan Home Assistant Brands (toekomstige PR)
+### Het icoon overal correct laten verschijnen (Home Assistant Brands)
 
-Om het icoon native te laten verschijnen, dien je het materiaal in bij de Brands-repository:
+De PNG-bestanden in [custom_components/frank_quarter_prices/brand/](custom_components/frank_quarter_prices/brand/) zijn **al klaar voor indiening** — er hoeft niets meer geconverteerd te worden. Dien ze één keer in bij de Brands-repository om *"icon not available"* permanent te verwijderen, ook uit de integratielijst:
 
-1. Converteer de SVG's naar PNG: `icon.png` (256×256) en `icon@2x.png` (512×512); optioneel `logo.png` / `logo@2x.png`.
-2. Fork [home-assistant/brands](https://github.com/home-assistant/brands).
-3. Plaats de bestanden onder `custom_integrations/frank_quarter_prices/`.
-4. Open een PR volgens de [richtlijnen voor bijdragen aan Brands](https://github.com/home-assistant/brands#guidelines) (PNG, transparante achtergrond, bijgesneden, juiste formaten).
-5. Zodra deze is samengevoegd, toont Home Assistant het icoon automatisch voor het domein `frank_quarter_prices`.
+1. Fork [home-assistant/brands](https://github.com/home-assistant/brands).
+2. Maak de map `custom_integrations/frank_quarter_prices/`.
+3. Kopieer hierheen de vier bestaande PNG's uit `custom_components/frank_quarter_prices/brand/`: `icon.png`, `icon@2x.png`, `logo.png`, `logo@2x.png`.
+4. Open een PR volgens de [richtlijnen voor bijdragen aan Brands](https://github.com/home-assistant/brands#guidelines) (PNG, transparante achtergrond, bijgesneden, juiste formaten — waaraan deze bestanden al voldoen).
+5. Zodra de PR is samengevoegd, toont Home Assistant het icoon automatisch overal voor het domein `frank_quarter_prices` — zowel op de integratiekaart als in de integratielijst.
 
 ---
 

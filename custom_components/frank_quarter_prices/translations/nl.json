@@ -1,0 +1,24 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Frank Quarter Prices",
+        "description": "Kies het land voor de marktprijzen van Frank Energie. Er is geen account of authenticatie nodig.",
+        "data": {
+          "country": "Land"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "Dit land is al geconfigureerd"
+    }
+  },
+  "selector": {
+    "country": {
+      "options": {
+        "NL": "Nederland (NL)",
+        "BE": "België (BE)"
+      }
+    }
+  }
+}
