@@ -1,73 +1,73 @@
-# Frank Quarter Prices for Home Assistant
+# Frank Kwartierprijzen voor Home Assistant (Custom Component)
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
 [![GitHub release](https://img.shields.io/badge/release-v0.1.1-blue.svg)](https://github.com/Bennie-JC/ha-frank-quarter-prices/releases/latest)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2025.1%2B-blue.svg)](https://www.home-assistant.io/)
 
-A Home Assistant custom integration that exposes **Frank Energie** dynamic market electricity prices — including **quarter-hourly (15-minute)** resolution — as a compact set of sensors, designed as a clean **price source for an Energy Management System (EMS)**.
+Een Home Assistant **custom component** die de **dynamische marktprijzen voor stroom van Frank Energie** ontsluit — inclusief **kwartierprijzen (15 minuten)** resolutie — als een compacte set sensoren, ontworpen als een zuivere **prijsbron voor een energiemanagementsysteem (EMS)**.
 
-> The integration polls the public Frank Energie GraphQL API every 15 minutes and provides today's and tomorrow's prices, the current price, and the cheapest/most-expensive windows for each day. The full price arrays are available as sensor attributes for your EMS logic.
+> Deze integratie haalt elke 15 minuten de openbare Frank Energie GraphQL API op en levert de prijzen van vandaag en morgen, de huidige prijs en het goedkoopste en duurste prijsvenster van elke dag. De volledige prijsreeksen zijn beschikbaar als sensorattributen voor je eigen EMS-logica, batterijsturing en dynamische energietarieven.
 
 ---
 
-## Table of contents
+## Inhoudsopgave
 
-- [Features](#features)
-- [Installation](#installation)
-  - [HACS installation (recommended)](#hacs-installation-recommended)
-  - [Manual installation](#manual-installation)
-- [Configuration](#configuration)
-- [Sensors created](#sensors-created)
-  - [Sensor overview](#sensor-overview)
-  - [Cheapest / most expensive sensors](#cheapest--most-expensive-sensors)
-  - [Price block attributes](#price-block-attributes)
-- [Tomorrow prices handling](#tomorrow-prices-handling)
-- [GraphQL API source](#graphql-api-source)
-- [ApexCharts dashboard](#apexcharts-dashboard)
-- [EMS integration examples](#ems-integration-examples)
-- [Example Home Assistant templates](#example-home-assistant-templates)
-- [Brand assets (integration icon)](#brand-assets-integration-icon)
-- [Troubleshooting](#troubleshooting)
-- [FAQ](#faq)
-- [Contributing](#contributing)
+- [Functies](#functies)
+- [Installatie](#installatie)
+  - [HACS-installatie (aanbevolen)](#hacs-installatie-aanbevolen)
+  - [Handmatige installatie](#handmatige-installatie)
+- [Configuratie](#configuratie)
+- [Aangemaakte sensoren](#aangemaakte-sensoren)
+  - [Sensoroverzicht](#sensoroverzicht)
+  - [Sensoren goedkoopste / duurste prijsvenster](#sensoren-goedkoopste--duurste-prijsvenster)
+  - [Attributen van prijsblokken](#attributen-van-prijsblokken)
+- [Verwerking van prijzen voor morgen](#verwerking-van-prijzen-voor-morgen)
+- [GraphQL API-bron](#graphql-api-bron)
+- [ApexCharts-dashboard](#apexcharts-dashboard)
+- [EMS-integratievoorbeelden](#ems-integratievoorbeelden)
+- [Voorbeeld Home Assistant-templates](#voorbeeld-home-assistant-templates)
+- [Merkmateriaal (integratie-icoon)](#merkmateriaal-integratie-icoon)
+- [Probleemoplossing](#probleemoplossing)
+- [Veelgestelde vragen](#veelgestelde-vragen)
+- [Bijdragen](#bijdragen)
 - [Disclaimer](#disclaimer)
-- [License](#license)
+- [Licentie](#licentie)
 
 ---
 
-## Features
+## Functies
 
-- ⚡ **Quarter-hourly prices** — full 15-minute market price resolution (with automatic fallback to 60-minute data when that is what Frank publishes).
-- 📅 **Today & tomorrow** — both days fetched automatically; tomorrow's prices appear once published (typically around 15:00 CET).
-- 💶 **Current price sensor** — the active price slot, with the full price breakdown as attributes.
-- 📉 **Cheapest / most expensive** price + start-time sensors for the **full day** today and tomorrow.
-- 🗂️ **Full price arrays** for today and tomorrow exposed as sensor attributes — ideal as an EMS data source.
-- 🔁 **Resilient updates** — tomorrow data being unavailable never breaks the integration; it simply stays unavailable until published.
-- 🌍 **NL default with optional BE support** via the `x-country` header.
-- 🛠️ **Diagnostics support** for easy troubleshooting (secrets redacted).
-- 🧩 Built on Home Assistant's `DataUpdateCoordinator` and config entries, following modern (2025+) best practices.
+- ⚡ **Kwartierprijzen** — volledige marktprijsresolutie van 15 minuten (met automatische terugval naar 60-minutendata wanneer dat is wat Frank Energie publiceert).
+- 📅 **Vandaag & morgen** — beide dagen worden automatisch opgehaald; de prijzen voor morgen verschijnen zodra ze gepubliceerd zijn (doorgaans rond 15:00 CET).
+- 💶 **Sensor voor de huidige prijs** — het actieve prijsblok, met de volledige prijsopbouw als attributen.
+- 📉 Sensoren voor het **goedkoopste en duurste** prijsvenster (prijs + starttijd) voor de **volledige dag**, zowel vandaag als morgen.
+- 🗂️ **Volledige prijsreeksen** voor vandaag en morgen als sensorattributen — ideaal als databron voor een EMS.
+- 🔁 **Robuuste updates** — als de data voor morgen nog niet beschikbaar is, breekt dit de integratie nooit; de sensoren blijven simpelweg onbeschikbaar tot publicatie.
+- 🌍 **NL als standaard met optionele BE-ondersteuning** via de `x-country`-header.
+- 🛠️ **Diagnostiek-ondersteuning** voor eenvoudige probleemoplossing (geheimen worden weggelaten).
+- 🧩 Gebouwd op Home Assistant's `DataUpdateCoordinator` en config entries, volgens de moderne best practices (2025+).
 
 ---
 
-## Installation
+## Installatie
 
-### HACS installation (recommended)
+### HACS-installatie (aanbevolen)
 
-1. Make sure [HACS](https://hacs.xyz/) is installed.
-2. In Home Assistant go to **HACS → Integrations → ⋮ (top right) → Custom repositories**.
-3. Add the repository URL:
+1. Zorg dat [HACS](https://hacs.xyz/) geïnstalleerd is.
+2. Ga in Home Assistant naar **HACS → Integraties → ⋮ (rechtsboven) → Aangepaste repositories**.
+3. Voeg de repository-URL toe:
    ```
    https://github.com/Bennie-JC/ha-frank-quarter-prices
    ```
-   and select the category **Integration**.
-4. Search for **Frank Quarter Prices** in HACS and click **Download**.
-5. **Restart Home Assistant**.
+   en kies de categorie **Integratie**.
+4. Zoek naar **Frank Quarter Prices** in HACS en klik op **Downloaden**.
+5. **Herstart Home Assistant**.
 
-### Manual installation
+### Handmatige installatie
 
-1. Download the latest release from the [releases page](https://github.com/Bennie-JC/ha-frank-quarter-prices/releases).
-2. Copy the folder `custom_components/frank_quarter_prices` into your Home Assistant `config/custom_components/` directory:
+1. Download de nieuwste release van de [releases-pagina](https://github.com/Bennie-JC/ha-frank-quarter-prices/releases).
+2. Kopieer de map `custom_components/frank_quarter_prices` naar de map `config/custom_components/` van je Home Assistant:
    ```
    config/
    └── custom_components/
@@ -76,65 +76,65 @@ A Home Assistant custom integration that exposes **Frank Energie** dynamic marke
            ├── manifest.json
            ├── ...
    ```
-3. **Restart Home Assistant**.
+3. **Herstart Home Assistant**.
 
 ---
 
-## Configuration
+## Configuratie
 
-Configuration is done entirely through the UI (config flow).
+De configuratie verloopt volledig via de gebruikersinterface (config flow).
 
-1. Go to **Settings → Devices & Services → Add Integration**.
-2. Search for **Frank Quarter Prices**.
-3. Follow the prompts and submit.
+1. Ga naar **Instellingen → Apparaten & Services → Integratie toevoegen**.
+2. Zoek naar **Frank Quarter Prices**.
+3. Volg de stappen en bevestig.
 
-All entities are grouped under a single **Frank** device, so entity IDs take the short form `sensor.frank_<name>` (for example `sensor.frank_current_price`). The examples in this README use those IDs directly — you can confirm them in **Developer Tools → States** on your system.
+Alle entiteiten worden gegroepeerd onder één **Frank**-apparaat, zodat entiteit-ID's de korte vorm `sensor.frank_<naam>` aannemen (bijvoorbeeld `sensor.frank_current_price`). De voorbeelden in deze README gebruiken die ID's direct — je kunt ze controleren via **Ontwikkelaarshulpmiddelen → Statussen** op je eigen systeem.
 
 ---
 
-## Sensors created
+## Aangemaakte sensoren
 
-The integration creates exactly **12 entities**, scoped for EMS use.
+De integratie maakt exact **12 entiteiten** aan, afgestemd op gebruik binnen een EMS.
 
-For each day the integration requests **all** electricity price blocks from Frank (local 00:00 → 24:00) and finds the single cheapest and single most-expensive block of that **full day**, at the raw resolution Frank returns (15-minute or hourly). No next-24h/48h windows, current-time-only filtering, future-only filtering, or hourly averaging is used.
+Voor elke dag vraagt de integratie **alle** prijsblokken voor stroom op bij Frank Energie (lokaal 00:00 → 24:00) en bepaalt het enige goedkoopste en het enige duurste blok van die **volledige dag**, op de ruwe resolutie die Frank teruggeeft (15 minuten of per uur). Er wordt geen filtering op de komende 24/48 uur, geen filtering op alleen de huidige tijd, geen filtering op alleen de toekomst en geen uurgemiddelde toegepast.
 
-### Sensor overview
+### Sensoroverzicht
 
-| Entity | Description | State | Unit |
+| Entiteit | Beschrijving | Status | Eenheid |
 | --- | --- | --- | --- |
-| `sensor.frank_current_price` | Price of the currently active slot | `total_price_eur_kwh` | EUR/kWh |
-| `sensor.frank_cheapest_today` | Cheapest block price of the full day today | `total_price_eur_kwh` | EUR/kWh |
-| `sensor.frank_cheapest_time_today` | Start time of the cheapest block today | `HH:MM` | — |
-| `sensor.frank_most_expensive_today` | Most expensive block price of the full day today | `total_price_eur_kwh` | EUR/kWh |
-| `sensor.frank_most_expensive_time_today` | Start time of the most expensive block today | `HH:MM` | — |
-| `sensor.frank_cheapest_tomorrow` | Cheapest block price of the full day tomorrow | `total_price_eur_kwh` | EUR/kWh |
-| `sensor.frank_cheapest_time_tomorrow` | Start time of the cheapest block tomorrow | `HH:MM` | — |
-| `sensor.frank_most_expensive_tomorrow` | Most expensive block price of the full day tomorrow | `total_price_eur_kwh` | EUR/kWh |
-| `sensor.frank_most_expensive_time_tomorrow` | Start time of the most expensive block tomorrow | `HH:MM` | — |
-| `sensor.frank_prices_today` | Number of price blocks today (full array in attributes) | count | blocks |
-| `sensor.frank_prices_tomorrow` | Number of price blocks tomorrow (full array in attributes) | count | blocks |
-| `binary_sensor.frank_tomorrow_prices_available` | Whether tomorrow's prices are published | on/off | — |
+| `sensor.frank_current_price` | Prijs van het op dit moment actieve blok | `total_price_eur_kwh` | EUR/kWh |
+| `sensor.frank_cheapest_today` | Goedkoopste blokprijs van de volledige dag vandaag | `total_price_eur_kwh` | EUR/kWh |
+| `sensor.frank_cheapest_time_today` | Starttijd van het goedkoopste blok vandaag | `HH:MM` | — |
+| `sensor.frank_most_expensive_today` | Duurste blokprijs van de volledige dag vandaag | `total_price_eur_kwh` | EUR/kWh |
+| `sensor.frank_most_expensive_time_today` | Starttijd van het duurste blok vandaag | `HH:MM` | — |
+| `sensor.frank_cheapest_tomorrow` | Goedkoopste blokprijs van de volledige dag morgen | `total_price_eur_kwh` | EUR/kWh |
+| `sensor.frank_cheapest_time_tomorrow` | Starttijd van het goedkoopste blok morgen | `HH:MM` | — |
+| `sensor.frank_most_expensive_tomorrow` | Duurste blokprijs van de volledige dag morgen | `total_price_eur_kwh` | EUR/kWh |
+| `sensor.frank_most_expensive_time_tomorrow` | Starttijd van het duurste blok morgen | `HH:MM` | — |
+| `sensor.frank_prices_today` | Aantal prijsblokken vandaag (volledige reeks in attributen) | aantal | blokken |
+| `sensor.frank_prices_tomorrow` | Aantal prijsblokken morgen (volledige reeks in attributen) | aantal | blokken |
+| `binary_sensor.frank_tomorrow_prices_available` | Of de prijzen voor morgen gepubliceerd zijn | aan/uit | — |
 
-### Cheapest / most expensive sensors
+### Sensoren goedkoopste / duurste prijsvenster
 
-For each day there is a matched pair of sensors built from the same block:
+Voor elke dag is er een bij elkaar horend paar sensoren, opgebouwd uit hetzelfde blok:
 
-**Price sensor** (`sensor.frank_cheapest_today`, `sensor.frank_most_expensive_today`, and the `*_tomorrow` variants):
+**Prijssensor** (`sensor.frank_cheapest_today`, `sensor.frank_most_expensive_today` en de `*_tomorrow`-varianten):
 
-- **State:** the block's `total_price_eur_kwh` (EUR/kWh).
-- **Attributes:**
-  - `time` — the block's local **start** time as `"HH:MM"` (e.g. `"19:45"`),
-  - `timestamp` — the block start as a local ISO datetime,
-  - `end_timestamp` — the block end as a local ISO datetime,
-  - `duration_minutes` — the block length (15 or 60),
-  - `full_block` — the complete price breakdown.
+- **Status:** de `total_price_eur_kwh` van het blok (EUR/kWh).
+- **Attributen:**
+  - `time` — de lokale **start**tijd van het blok als `"HH:MM"` (bijv. `"19:45"`),
+  - `timestamp` — de start van het blok als lokale ISO-datumtijd,
+  - `end_timestamp` — het einde van het blok als lokale ISO-datumtijd,
+  - `duration_minutes` — de bloklengte (15 of 60),
+  - `full_block` — de volledige prijsopbouw.
 
-**Time sensor** (`sensor.frank_cheapest_time_today`, `sensor.frank_most_expensive_time_today`, and the `*_tomorrow` variants):
+**Tijdsensor** (`sensor.frank_cheapest_time_today`, `sensor.frank_most_expensive_time_today` en de `*_tomorrow`-varianten):
 
-- **State:** the block's local **start** time as `"HH:MM"` (e.g. `"13:45"`).
-- **Attributes:** `price`, `timestamp`, `end_timestamp`, `duration_minutes`, `full_block`.
+- **Status:** de lokale **start**tijd van het blok als `"HH:MM"` (bijv. `"13:45"`).
+- **Attributen:** `price`, `timestamp`, `end_timestamp`, `duration_minutes`, `full_block`.
 
-Example:
+Voorbeeld:
 
 ```text
 sensor.frank_cheapest_today = 0.0735           # EUR/kWh
@@ -152,11 +152,11 @@ sensor.frank_cheapest_time_today = "19:45"
     duration_minutes: 15
 ```
 
-The `*_tomorrow` sensors stay **unavailable** until Frank publishes tomorrow's prices.
+De `*_tomorrow`-sensoren blijven **onbeschikbaar** totdat Frank Energie de prijzen voor morgen publiceert.
 
-### Price block attributes
+### Attributen van prijsblokken
 
-The `full_block` attribute (and each entry of the `prices` arrays) has the form:
+Het attribuut `full_block` (en elk item in de `prices`-reeksen) heeft de volgende vorm:
 
 ```yaml
 from: "2026-06-13T14:00:00+02:00"
@@ -170,34 +170,34 @@ total_price_eur_kwh: 0.21682
 per_unit: "kWh"
 ```
 
-The `sensor.frank_prices_today` and `sensor.frank_prices_tomorrow` sensors expose the **complete array** of price blocks for the full day in their `prices` attribute, along with `resolution_minutes`, `cheapest_block`, `most_expensive_block`, `average_price`, `min_price` and `max_price`. This makes them the convenient single source for an EMS to plan against.
+De sensoren `sensor.frank_prices_today` en `sensor.frank_prices_tomorrow` stellen de **volledige reeks** prijsblokken voor de hele dag beschikbaar in hun `prices`-attribuut, samen met `resolution_minutes`, `cheapest_block`, `most_expensive_block`, `average_price`, `min_price` en `max_price`. Daarmee zijn ze de handige enkele bron waartegen een EMS kan plannen.
 
 ---
 
-## Tomorrow prices handling
+## Verwerking van prijzen voor morgen
 
-Frank Energie publishes the next day's prices during the afternoon (typically around **15:00 CET**). The integration handles this gracefully:
+Frank Energie publiceert de prijzen van de volgende dag in de loop van de middag (doorgaans rond **15:00 CET**). De integratie gaat hier soepel mee om:
 
-- Tomorrow's prices are **always attempted** on every update (every 15 minutes).
-- If they are **not yet available**, the integration:
-  - keeps `binary_sensor.frank_tomorrow_prices_available` **off**,
-  - leaves the `*_tomorrow` sensors **unavailable**,
-  - logs an **info** message only — it never raises `UpdateFailed` or marks the integration as failed just because tomorrow is missing.
-- Once published (typically after **15:00 local time**), `binary_sensor.frank_tomorrow_prices_available` turns **on** and the tomorrow sensors populate on the next 15-minute refresh.
+- De prijzen voor morgen worden bij **elke update** (elke 15 minuten) **altijd geprobeerd**.
+- Als ze **nog niet beschikbaar** zijn, dan:
+  - houdt de integratie `binary_sensor.frank_tomorrow_prices_available` **uit**,
+  - laat ze de `*_tomorrow`-sensoren **onbeschikbaar**,
+  - logt ze enkel een **info**-melding — er wordt nooit een `UpdateFailed` opgeworpen en de integratie wordt niet als mislukt gemarkeerd alleen omdat morgen ontbreekt.
+- Zodra ze gepubliceerd zijn (doorgaans na **15:00 lokale tijd**), gaat `binary_sensor.frank_tomorrow_prices_available` **aan** en vullen de sensoren voor morgen zich bij de volgende verversing van 15 minuten.
 
-Use the binary sensor to gate automations that depend on tomorrow's prices.
+Gebruik de binaire sensor om automatiseringen die afhankelijk zijn van de prijzen van morgen pas te laten starten zodra die beschikbaar zijn.
 
 ---
 
-## GraphQL API source
+## GraphQL API-bron
 
-Prices are sourced from the public Frank Energie GraphQL API:
+De prijzen worden opgehaald uit de openbare Frank Energie GraphQL API:
 
 ```
 https://graphql.frankenergie.nl/
 ```
 
-No authentication is required for market prices. The integration issues a query similar to:
+Voor marktprijzen is geen authenticatie vereist. De integratie voert een query uit die lijkt op:
 
 ```graphql
 query MarketPrices($date: String!, $resolution: PriceResolution!) {
@@ -216,44 +216,44 @@ query MarketPrices($date: String!, $resolution: PriceResolution!) {
 }
 ```
 
-The integration requests `resolution: PT15M`, which returns **native quarter-hourly prices (96 blocks/day)** — no authentication required. The blocks are used exactly as returned and are never aggregated.
+De integratie vraagt `resolution: PT15M` op, wat **native kwartierprijzen (96 blokken per dag)** teruggeeft — zonder authenticatie. De blokken worden exact gebruikt zoals ze worden teruggegeven en worden nooit samengevoegd.
 
-> **Important:** the `resolution: PriceResolution!` argument is what unlocks quarter-hour data. Without it (or with `PT60M`) the same `marketPrices` query returns only **24 hourly blocks**, which is why the cheapest slot previously snapped to e.g. `14:00` instead of `13:45`. The `marketPricesElectricity(startDate, endDate)` query also only returns hourly data and is not used.
+> **Belangrijk:** het argument `resolution: PriceResolution!` ontsluit de kwartierdata. Zonder dit argument (of met `PT60M`) geeft dezelfde `marketPrices`-query slechts **24 uurblokken** terug, en dat is de reden waarom het goedkoopste blok eerder bijvoorbeeld naar `14:00` sprong in plaats van `13:45`. De query `marketPricesElectricity(startDate, endDate)` geeft eveneens alleen uurdata terug en wordt niet gebruikt.
 
-Requests use a 30-second timeout and are retried up to 3 times. Invalid records are validated and skipped. Belgium (BE) is supported by sending the `x-country: BE` header; the Netherlands (NL) is the default.
+Verzoeken gebruiken een time-out van 30 seconden en worden tot 3 keer opnieuw geprobeerd. Ongeldige records worden gevalideerd en overgeslagen. België (BE) wordt ondersteund door de header `x-country: BE` mee te sturen; Nederland (NL) is de standaard.
 
 ---
 
-## ApexCharts dashboard
+## ApexCharts-dashboard
 
-You can visualize the prices as a color-coded bar chart — **one bar per price block**. When Frank returns native quarter-hour data you get **96 bars per day**; when only hourly data is available you get **24 bars**. The data is never aggregated.
+Je kunt de prijzen visualiseren als een kleurgecodeerde staafdiagram — **één staaf per prijsblok**. Wanneer Frank Energie native kwartierdata teruggeeft, krijg je **96 staven per dag**; als alleen uurdata beschikbaar is, krijg je **24 staven**. De data wordt nooit samengevoegd.
 
-![Frank electricity price today — quarter-hour bars colored green/amber/red by price](images/apexcharts_today.png)
+![Frank stroomprijs vandaag — kwartierstaven gekleurd groen/oranje/rood op basis van prijs](images/apexcharts_today.png)
 
-### Required frontend cards (HACS)
+### Benodigde frontend-kaarten (HACS)
 
-Install both of these from **HACS → Frontend**:
+Installeer beide via **HACS → Frontend**:
 
 - **ApexCharts Card** — `RomRider/apexcharts-card`
 - **Config Template Card** — `iantrich/config-template-card`
 
-After installing, reload your browser (or clear the frontend cache) so the new card types are available.
+Herlaad na de installatie je browser (of leeg de frontend-cache) zodat de nieuwe kaarttypes beschikbaar zijn.
 
-### How it works
+### Hoe het werkt
 
-- The chart reads the **`prices`** attribute of `sensor.frank_prices_today` (or `sensor.frank_prices_tomorrow`).
-- Each entry in `attributes.prices` is rendered individually using its **`from`** timestamp (x-axis) and **`total_price_eur_kwh`** value (y-axis).
-- Because each bar carries its own timestamp, quarter-hour blocks plot at `00:00`, `00:15`, `00:30`, … exactly as returned — no hourly rounding.
-- The three **color thresholds** (green → amber → red) can be adjusted manually in the YAML, or driven by optional `input_number` helpers (`sensor.frank_green_threshold` / `sensor.frank_red_threshold`); the examples fall back to `0.12` and `0.25 €/kWh` when those helpers don't exist.
+- De grafiek leest het attribuut **`prices`** van `sensor.frank_prices_today` (of `sensor.frank_prices_tomorrow`).
+- Elk item in `attributes.prices` wordt afzonderlijk weergegeven aan de hand van het **`from`**-tijdstempel (x-as) en de **`total_price_eur_kwh`**-waarde (y-as).
+- Omdat elke staaf zijn eigen tijdstempel heeft, worden kwartierblokken precies op `00:00`, `00:15`, `00:30`, … geplot zoals teruggegeven — zonder afronding naar het uur.
+- De drie **kleurdrempels** (groen → oranje → rood) kun je handmatig aanpassen in de YAML, of laten aansturen door optionele `input_number`-helpers (`sensor.frank_green_threshold` / `sensor.frank_red_threshold`); de voorbeelden vallen terug op `0.12` en `0.25 €/kWh` wanneer die helpers niet bestaan.
 
-Ready-to-use files are in [examples/](examples/):
+Kant-en-klare bestanden vind je in [examples/](examples/):
 
 - [examples/apexcharts_frank_prices_today.yaml](examples/apexcharts_frank_prices_today.yaml)
 - [examples/apexcharts_frank_prices_tomorrow.yaml](examples/apexcharts_frank_prices_tomorrow.yaml)
 
-### Today chart
+### Grafiek voor vandaag
 
-Add a new **Manual** dashboard card and paste:
+Voeg een nieuwe **Handmatige** dashboardkaart toe en plak:
 
 ```yaml
 type: custom:config-template-card
@@ -320,11 +320,11 @@ card:
           });
 ```
 
-### Tomorrow chart
+### Grafiek voor morgen
 
-Same style, reading `sensor.frank_prices_tomorrow`. The card stays empty until Frank publishes tomorrow's prices (≈15:00 CET).
+Dezelfde stijl, maar leest `sensor.frank_prices_tomorrow`. De kaart blijft leeg totdat Frank Energie de prijzen voor morgen publiceert (≈15:00 CET).
 
-> **Note on the span:** `apexcharts-card` has no reliable "tomorrow" span offset. The chart relies on the `data_generator`, which emits real timestamps from `attributes.prices`, so each bar plots at its correct absolute time regardless of the configured window. `span.offset: +24h` is included as a hint; if your version of the card ignores it, the bars still render at the right times because every point carries its own `from` datetime.
+> **Opmerking over de span:** `apexcharts-card` heeft geen betrouwbare "tomorrow"-span-offset. De grafiek vertrouwt op de `data_generator`, die echte tijdstempels uit `attributes.prices` uitstuurt, zodat elke staaf op zijn correcte absolute tijd wordt geplot, ongeacht het ingestelde venster. `span.offset: +24h` is toegevoegd als hint; als jouw versie van de kaart dit negeert, worden de staven nog steeds op de juiste tijden weergegeven omdat elk punt zijn eigen `from`-datumtijd draagt.
 
 ```yaml
 type: custom:config-template-card
@@ -394,11 +394,11 @@ card:
 
 ---
 
-## EMS integration examples
+## EMS-integratievoorbeelden
 
-Use the cheapest/most-expensive windows to drive an Energy Management System, charging, or heavy appliances. Each cheapest/most-expensive sensor exposes `timestamp` and `end_timestamp` attributes (local ISO datetimes) that are convenient for scheduling.
+Gebruik het goedkoopste en duurste prijsvenster om een energiemanagementsysteem (EMS), laden of zware apparaten aan te sturen — denk aan **batterij laden op goedkope stroom**, **batterij ontladen op dure stroom** en **energie-arbitrage**. Elke goedkoopste/duurste sensor stelt de attributen `timestamp` en `end_timestamp` beschikbaar (lokale ISO-datumtijden) die handig zijn voor het inplannen.
 
-**Charge an EV during the cheapest block today:**
+**Laad een elektrische auto tijdens het goedkoopste blok vandaag:**
 
 ```yaml
 automation:
@@ -414,7 +414,7 @@ automation:
           entity_id: switch.ev_charger
 ```
 
-**Avoid running the dishwasher during the daily peak:**
+**Voorkom dat de vaatwasser draait tijdens de dagelijkse piek:**
 
 ```yaml
 automation:
@@ -430,7 +430,7 @@ automation:
           entity_id: switch.dishwasher
 ```
 
-**Only act when prices are cheap enough (threshold):**
+**Reageer alleen wanneer de prijs laag genoeg is (drempelwaarde):**
 
 ```yaml
 automation:
@@ -450,15 +450,15 @@ automation:
 
 ---
 
-## Example Home Assistant templates
+## Voorbeeld Home Assistant-templates
 
-**Show the current price nicely formatted:**
+**Toon de huidige prijs netjes opgemaakt:**
 
 ```yaml
 {{ states('sensor.frank_current_price') | float(0) | round(4) }} €/kWh
 ```
 
-**Time until the cheapest block today:**
+**Tijd tot het goedkoopste blok vandaag:**
 
 ```yaml
 {% set start = state_attr('sensor.frank_cheapest_today', 'timestamp') | as_datetime %}
@@ -469,7 +469,7 @@ automation:
 {% endif %}
 ```
 
-**Is the current price below today's average?**
+**Is de huidige prijs lager dan het gemiddelde van vandaag?**
 
 ```yaml
 {% set avg = state_attr('sensor.frank_prices_today', 'average_price') %}
@@ -480,7 +480,7 @@ automation:
 {% endif %}
 ```
 
-**Cheapest price tomorrow (waits until published):**
+**Goedkoopste prijs morgen (wacht tot gepubliceerd):**
 
 ```yaml
 {% if is_state('binary_sensor.frank_tomorrow_prices_available', 'on') %}
@@ -492,37 +492,37 @@ automation:
 
 ---
 
-## Brand assets (integration icon)
+## Merkmateriaal (integratie-icoon)
 
-This integration ships neutral, self-made icon and logo artwork (an electricity bolt over a quarter-hour clock, in a cloud-blue style) under [custom_components/frank_quarter_prices/icons/](custom_components/frank_quarter_prices/icons/):
+Deze integratie wordt geleverd met neutraal, zelfgemaakt icoon- en logomateriaal (een bliksemschicht voor een kwartierklok, in een wolkblauwe stijl) onder [custom_components/frank_quarter_prices/icons/](custom_components/frank_quarter_prices/icons/):
 
-- `icon.svg` — square app-style mark
-- `logo.svg` — wordmark
+- `icon.svg` — vierkant app-achtig logo
+- `logo.svg` — woordmerk
 
-These deliberately **do not** use the official Frank Energie logo or any trademarked assets.
+Deze gebruiken bewust **niet** het officiële Frank Energie-logo of enig handelsmerk.
 
-> **Heads-up:** Home Assistant loads integration icons from the central [home-assistant/brands](https://github.com/home-assistant/brands) repository, **not** from files inside a custom integration. Until this integration is added to Brands, Home Assistant may show a generic placeholder or *"icon not available"*. This is cosmetic and does not affect functionality.
+> **Let op:** Home Assistant laadt integratie-iconen uit de centrale [home-assistant/brands](https://github.com/home-assistant/brands) repository, **niet** uit bestanden binnen een custom component. Totdat deze integratie aan Brands is toegevoegd, kan Home Assistant een generieke tijdelijke afbeelding of *"icon not available"* tonen. Dit is cosmetisch en heeft geen invloed op de werking.
 
-### Adding the icon to Home Assistant Brands (future PR)
+### Het icoon toevoegen aan Home Assistant Brands (toekomstige PR)
 
-To make the icon appear natively, submit the artwork to the Brands repository:
+Om het icoon native te laten verschijnen, dien je het materiaal in bij de Brands-repository:
 
-1. Convert the SVGs to PNG: `icon.png` (256×256) and `icon@2x.png` (512×512); optionally `logo.png` / `logo@2x.png`.
+1. Converteer de SVG's naar PNG: `icon.png` (256×256) en `icon@2x.png` (512×512); optioneel `logo.png` / `logo@2x.png`.
 2. Fork [home-assistant/brands](https://github.com/home-assistant/brands).
-3. Place the files under `custom_integrations/frank_quarter_prices/`.
-4. Open a PR following the [Brands contribution guidelines](https://github.com/home-assistant/brands#guidelines) (PNG, transparent background, trimmed, correct sizes).
-5. Once merged, Home Assistant will display the icon automatically for the `frank_quarter_prices` domain.
+3. Plaats de bestanden onder `custom_integrations/frank_quarter_prices/`.
+4. Open een PR volgens de [richtlijnen voor bijdragen aan Brands](https://github.com/home-assistant/brands#guidelines) (PNG, transparante achtergrond, bijgesneden, juiste formaten).
+5. Zodra deze is samengevoegd, toont Home Assistant het icoon automatisch voor het domein `frank_quarter_prices`.
 
 ---
 
-## Troubleshooting
+## Probleemoplossing
 
-- **Entities show `unavailable`:**
-  - For tomorrow / cheapest-tomorrow sensors this is expected before Frank publishes the next day (around 15:00 CET). Check `binary_sensor.frank_tomorrow_prices_available`.
-  - For all sensors, verify the integration loaded under **Settings → Devices & Services**.
-- **Entity IDs don't match the README:** see the [Configuration](#configuration) note — adjust to the IDs shown in **Developer Tools → States**.
-- **No data at all:** confirm Home Assistant has outbound internet access to `https://graphql.frankenergie.nl/`.
-- **Enable debug logging** by adding this to `configuration.yaml` and restarting:
+- **Entiteiten tonen `unavailable`:**
+  - Voor de sensoren voor morgen / goedkoopste-morgen is dit verwacht voordat Frank Energie de volgende dag publiceert (rond 15:00 CET). Controleer `binary_sensor.frank_tomorrow_prices_available`.
+  - Voor alle sensoren: controleer of de integratie geladen is onder **Instellingen → Apparaten & Services**.
+- **Entiteit-ID's komen niet overeen met de README:** zie de opmerking bij [Configuratie](#configuratie) — pas ze aan naar de ID's die getoond worden in **Ontwikkelaarshulpmiddelen → Statussen**.
+- **Helemaal geen data:** controleer of Home Assistant uitgaande internettoegang heeft tot `https://graphql.frankenergie.nl/`.
+- **Schakel debug-logging in** door dit toe te voegen aan `configuration.yaml` en te herstarten:
 
   ```yaml
   logger:
@@ -531,47 +531,47 @@ To make the icon appear natively, submit the artwork to the Brands repository:
       custom_components.frank_quarter_prices: debug
   ```
 
-- **Diagnostics:** open the device page → **⋮ → Download diagnostics** and attach the (secret-redacted) file to any bug report.
+- **Diagnostiek:** open de apparaatpagina → **⋮ → Diagnostiek downloaden** en voeg het (van geheimen ontdane) bestand toe aan elke bugmelding.
 
 ---
 
-## FAQ
+## Veelgestelde vragen
 
-**Do I need a Frank Energie account or API token?**
-No. Market prices are public and require no authentication.
+**Heb ik een Frank Energie-account of API-token nodig?**
+Nee. Marktprijzen zijn openbaar en vereisen geen authenticatie.
 
-**Does this show my personal contract/usage costs?**
-No. It exposes the market price components (market price, tax, sourcing markup, energy tax). Your effective tariff may differ depending on your contract.
+**Toont dit mijn persoonlijke contract- of verbruikskosten?**
+Nee. Het toont de componenten van de marktprijs (marktprijs, belasting, inkoopopslag, energiebelasting). Je werkelijke tarief kan afwijken afhankelijk van je contract.
 
-**What resolution are the prices?**
-Native quarter-hourly (15-minute, **96 blocks per day**) — the integration requests `resolution: PT15M` from the public `marketPrices` query. If Frank has no quarter-hour data for a given day it returns hourly (60-minute, 24 blocks) instead. The blocks are used exactly as returned and are never aggregated, so cheapest/most-expensive times reflect the exact quarter-hour start (e.g. `13:45`).
+**Welke resolutie hebben de prijzen?**
+Native kwartierprijzen (15 minuten, **96 blokken per dag**) — de integratie vraagt `resolution: PT15M` op via de openbare `marketPrices`-query. Heeft Frank Energie voor een bepaalde dag geen kwartierdata, dan wordt in plaats daarvan uurdata teruggegeven (60 minuten, 24 blokken). De blokken worden exact gebruikt zoals teruggegeven en worden nooit samengevoegd, zodat de goedkoopste/duurste tijden de exacte kwartierstart weergeven (bijv. `13:45`).
 
-**How often does it update?**
-Every 15 minutes via a `DataUpdateCoordinator`.
+**Hoe vaak wordt het bijgewerkt?**
+Elke 15 minuten via een `DataUpdateCoordinator`.
 
-**Why is tomorrow empty in the morning?**
-Frank typically publishes next-day prices in the afternoon (~15:00 CET). The `*_tomorrow` sensors stay unavailable until then and the integration never errors out in the meantime.
+**Waarom is morgen 's ochtends leeg?**
+Frank Energie publiceert de prijzen van de volgende dag doorgaans in de middag (~15:00 CET). De `*_tomorrow`-sensoren blijven tot dan onbeschikbaar en de integratie geeft in de tussentijd nooit een fout.
 
-**Does it support Belgium?**
-Yes — Netherlands (NL) is the default; Belgian (BE) pricing is requested via the `x-country` header.
+**Ondersteunt het België?**
+Ja — Nederland (NL) is de standaard; Belgische (BE) prijzen worden opgevraagd via de `x-country`-header.
 
-**Is this an official Frank Energie integration?**
-No, this is an independent community project. See the [disclaimer](#disclaimer).
+**Is dit een officiële Frank Energie-integratie?**
+Nee, dit is een onafhankelijk communityproject. Zie de [disclaimer](#disclaimer).
 
 ---
 
-## Contributing
+## Bijdragen
 
-Contributions are welcome! Please open an [issue](https://github.com/Bennie-JC/ha-frank-quarter-prices/issues) or submit a pull request. For larger changes, open an issue first to discuss what you would like to change.
+Bijdragen zijn welkom! Open gerust een [issue](https://github.com/Bennie-JC/ha-frank-quarter-prices/issues) of dien een pull request in. Open voor grotere wijzigingen eerst een issue om te bespreken wat je zou willen veranderen.
 
 ---
 
 ## Disclaimer
 
-This project is **not affiliated with, endorsed by, or supported by Frank Energie**. It uses a publicly accessible API and is provided "as is", without warranty of any kind. Prices shown may differ from your actual contract pricing. Use at your own risk.
+Dit project is **niet gelieerd aan, onderschreven door of ondersteund door Frank Energie**. Het maakt gebruik van een openbaar toegankelijke API en wordt geleverd "as is", zonder enige garantie. Getoonde prijzen kunnen afwijken van je werkelijke contractprijzen. Gebruik op eigen risico.
 
 ---
 
-## License
+## Licentie
 
-Distributed under the terms of the [LICENSE](LICENSE) file in this repository.
+Gedistribueerd onder de voorwaarden van het [LICENSE](LICENSE)-bestand in deze repository.
