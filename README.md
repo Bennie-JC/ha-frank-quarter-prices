@@ -1,4 +1,4 @@
-# Frank Kwartierprijzen voor Home Assistant (Custom Component)
+# Frank Energie Kwartierprijzen voor Home Assistant (Custom Component)
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
 [![GitHub release](https://img.shields.io/badge/release-v0.1.1-blue.svg)](https://github.com/Bennie-JC/ha-frank-quarter-prices/releases/latest)
