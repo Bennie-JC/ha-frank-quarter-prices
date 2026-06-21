@@ -499,7 +499,7 @@ automation:
 
 ## Merkmateriaal (integratie-icoon)
 
-Deze integratie wordt geleverd met neutraal, zelfgemaakt icoon- en logomateriaal (een bliksemschicht voor een kwartierklok, in een wolkblauwe stijl). De **kant-en-klare PNG-bestanden** staan onder [custom_components/frank_quarter_prices/brand/](custom_components/frank_quarter_prices/brand/) en voldoen exact aan de eisen van de Brands-repository:
+Deze integratie wordt geleverd met neutraal, zelfgemaakt icoon- en logomateriaal (een bliksemschicht voor een kwartierklok, in een wolkblauwe stijl). De **kant-en-klare PNG-bestanden** staan onder [custom_components/frank_quarter_prices/brand/](custom_components/frank_quarter_prices/brand/):
 
 - `icon.png` — 256×256
 - `icon@2x.png` — 512×512
@@ -508,17 +508,13 @@ Deze integratie wordt geleverd met neutraal, zelfgemaakt icoon- en logomateriaal
 
 De bewerkbare bronbestanden (SVG) staan onder [custom_components/frank_quarter_prices/icons/](custom_components/frank_quarter_prices/icons/) (`icon.svg`, `logo.svg`). Al dit materiaal gebruikt bewust **niet** het officiële Frank Energie-logo of enig handelsmerk.
 
-> **Waarom toont de integratielijst soms *"icon not available"*?** Home Assistant laadt integratie-iconen uitsluitend uit de centrale [home-assistant/brands](https://github.com/home-assistant/brands) repository (`https://brands.home-assistant.io/`), **niet** uit bestanden binnen een custom component. Het icoon kan al correct op de integratiekaart van HACS verschijnen (HACS leest de map `brand/`), terwijl de **integratielijst** van Home Assistant nog *"icon not available"* toont totdat het domein `frank_quarter_prices` is opgenomen in de Brands-repository. Dit is puur cosmetisch en heeft geen invloed op de werking.
+### Het icoon verschijnt overal (Home Assistant 2026.3+)
 
-### Het icoon overal correct laten verschijnen (Home Assistant Brands)
+Sinds **Home Assistant 2026.3** laden custom integraties hun eigen merkmateriaal rechtstreeks uit een lokale `brand/`-map binnen de integratie — er is **geen** PR naar de [home-assistant/brands](https://github.com/home-assistant/brands) repository meer nodig. Lokale merkafbeeldingen krijgen zelfs **voorrang** op de centrale Brands-repository. Deze integratie bevat die map al ([custom_components/frank_quarter_prices/brand/](custom_components/frank_quarter_prices/brand/)), dus het icoon verschijnt automatisch overal — zowel op de integratiekaart als in de **integratielijst**.
 
-De PNG-bestanden in [custom_components/frank_quarter_prices/brand/](custom_components/frank_quarter_prices/brand/) zijn **al klaar voor indiening** — er hoeft niets meer geconverteerd te worden. Dien ze één keer in bij de Brands-repository om *"icon not available"* permanent te verwijderen, ook uit de integratielijst:
+> **Zie je nog *"icon not available"*?** Herstart Home Assistant (of herlaad de integratie) en leeg eventueel de browsercache. De afbeeldingen worden geserveerd via `/api/brands/integration/frank_quarter_prices/icon.png`. Op Home Assistant-versies ouder dan 2026.3 toont de lijst een generieke tijdelijke afbeelding totdat je upgradet; dit is puur cosmetisch en heeft geen invloed op de werking.
 
-1. Fork [home-assistant/brands](https://github.com/home-assistant/brands).
-2. Maak de map `custom_integrations/frank_quarter_prices/`.
-3. Kopieer hierheen de vier bestaande PNG's uit `custom_components/frank_quarter_prices/brand/`: `icon.png`, `icon@2x.png`, `logo.png`, `logo@2x.png`.
-4. Open een PR volgens de [richtlijnen voor bijdragen aan Brands](https://github.com/home-assistant/brands#guidelines) (PNG, transparante achtergrond, bijgesneden, juiste formaten — waaraan deze bestanden al voldoen).
-5. Zodra de PR is samengevoegd, toont Home Assistant het icoon automatisch overal voor het domein `frank_quarter_prices` — zowel op de integratiekaart als in de integratielijst.
+> **Bijdragen aan Home Assistant Core?** Alleen als deze integratie ooit in HA core wordt opgenomen, moeten de lokale `brand/`-bestanden worden verwijderd en in plaats daarvan via een PR aan de [home-assistant/brands](https://github.com/home-assistant/brands) repository worden toegevoegd (map `custom_integrations/frank_quarter_prices/`).
 
 ---
 
