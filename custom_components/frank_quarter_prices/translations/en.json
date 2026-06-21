@@ -12,13 +12,5 @@
     "abort": {
       "already_configured": "This country is already configured"
     }
-  },
-  "selector": {
-    "country": {
-      "options": {
-        "NL": "Netherlands (NL)",
-        "BE": "Belgium (BE)"
-      }
-    }
   }
 }

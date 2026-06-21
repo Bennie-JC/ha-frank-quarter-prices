@@ -12,13 +12,5 @@
     "abort": {
       "already_configured": "Dit land is al geconfigureerd"
     }
-  },
-  "selector": {
-    "country": {
-      "options": {
-        "NL": "Nederland (NL)",
-        "BE": "België (BE)"
-      }
-    }
   }
 }

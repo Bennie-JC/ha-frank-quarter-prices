@@ -9,6 +9,7 @@ import voluptuous as vol
 
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 from homeassistant.helpers.selector import (
+    SelectOptionDict,
     SelectSelector,
     SelectSelectorConfig,
     SelectSelectorMode,
@@ -24,12 +25,22 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
+# Human-readable labels for the supported country codes. The stored option
+# value stays the uppercase ISO code (e.g. "NL"), which is sent in the
+# x-country header; only the displayed label differs.
+_COUNTRY_LABELS: dict[str, str] = {
+    "NL": "Netherlands (NL)",
+    "BE": "Belgium (BE)",
+}
+
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_COUNTRY, default=DEFAULT_COUNTRY): SelectSelector(
             SelectSelectorConfig(
-                options=list(SUPPORTED_COUNTRIES),
-                translation_key="country",
+                options=[
+                    SelectOptionDict(value=country, label=_COUNTRY_LABELS.get(country, country))
+                    for country in SUPPORTED_COUNTRIES
+                ],
                 mode=SelectSelectorMode.DROPDOWN,
             )
         ),
