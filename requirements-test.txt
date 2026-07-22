@@ -1,0 +1,6 @@
+# Test tooling for the Frank Quarter Prices integration.
+#
+# pytest-homeassistant-custom-component pulls in a matching Home Assistant
+# release plus pytest and the test helpers used by the HA test suite.
+ruff
+pytest-homeassistant-custom-component==0.13.316
