@@ -27,6 +27,10 @@ Een Home Assistant **custom component** die de **dynamische marktprijzen voor st
   - [Sensoroverzicht](#sensoroverzicht)
   - [Sensoren goedkoopste / duurste prijsvenster](#sensoren-goedkoopste--duurste-prijsvenster)
   - [Attributen van prijsblokken](#attributen-van-prijsblokken)
+- [Home Assistant Energy Dashboard](#home-assistant-energy-dashboard)
+  - [Netafname (verbruik)](#netafname-verbruik)
+  - [Teruglevering aan het net](#teruglevering-aan-het-net)
+  - [Rekenvoorbeeld terugleverprijs](#rekenvoorbeeld-terugleverprijs)
 - [Verwerking van prijzen voor morgen](#verwerking-van-prijzen-voor-morgen)
 - [GraphQL API-bron](#graphql-api-bron)
 - [ApexCharts-dashboard](#apexcharts-dashboard)
@@ -99,7 +103,7 @@ Alle entiteiten worden gegroepeerd onder één **Frank**-apparaat, zodat entitei
 
 ## Aangemaakte sensoren
 
-De integratie maakt exact **12 entiteiten** aan, afgestemd op gebruik binnen een EMS.
+De integratie maakt exact **13 entiteiten** aan, afgestemd op gebruik binnen een EMS.
 
 Voor elke dag vraagt de integratie **alle** prijsblokken voor stroom op bij Frank Energie (lokaal 00:00 → 24:00) en bepaalt het enige goedkoopste en het enige duurste blok van die **volledige dag**, op de ruwe resolutie die Frank teruggeeft (15 minuten of per uur). Er wordt geen filtering op de komende 24/48 uur, geen filtering op alleen de huidige tijd, geen filtering op alleen de toekomst en geen uurgemiddelde toegepast.
 
@@ -108,6 +112,7 @@ Voor elke dag vraagt de integratie **alle** prijsblokken voor stroom op bij Fran
 | Entiteit | Beschrijving | Status | Eenheid |
 | --- | --- | --- | --- |
 | `sensor.frank_current_price` | Prijs van het op dit moment actieve blok | `total_price_eur_kwh` | EUR/kWh |
+| `sensor.frank_current_return_price` | Geschatte actuele terugleverprijs voor stroom, op basis van het geverifieerde Frank-marktprijsveld en de ingestelde teruglevercorrectie | berekende prijs | EUR/kWh |
 | `sensor.frank_cheapest_today` | Goedkoopste blokprijs van de volledige dag vandaag | `total_price_eur_kwh` | EUR/kWh |
 | `sensor.frank_cheapest_time_today` | Starttijd van het goedkoopste blok vandaag | `HH:MM` | — |
 | `sensor.frank_most_expensive_today` | Duurste blokprijs van de volledige dag vandaag | `total_price_eur_kwh` | EUR/kWh |
@@ -176,6 +181,149 @@ per_unit: "kWh"
 ```
 
 De sensoren `sensor.frank_prices_today` en `sensor.frank_prices_tomorrow` stellen de **volledige reeks** prijsblokken voor de hele dag beschikbaar in hun `prices`-attribuut, samen met `resolution_minutes`, `cheapest_block`, `most_expensive_block`, `average_price`, `min_price` en `max_price`. Daarmee zijn ze de handige enkele bron waartegen een EMS kan plannen.
+
+---
+
+## Home Assistant Energy Dashboard
+
+Vanaf versie `0.1.3` zijn de actuele-prijssensoren geschikt voor het **Home Assistant Energy Dashboard**. Zo koppel je de **dynamische stroomprijs** van Frank Energie — onderdeel van je **dynamische energieprijzen** — aan zowel je netafname als je teruglevering. Je stelt dit in via **Instellingen → Dashboards → Energie** bij je elektriciteitsnet-configuratie.
+
+**Snel overzicht — welke entiteit hoort waar:**
+
+```text
+Kosten bijhouden:
+Gebruik een entiteit met de actuele prijs
+→ Current price
+→ sensor.frank_current_price
+
+Vergoeding exporteren:
+Een entiteit met actuele vergoeding gebruiken
+→ Current feed-in price
+→ sensor.frank_current_return_price
+```
+
+> **Let op — niet verwisselen:**
+> - `sensor.frank_current_price` is de **actuele stroomprijs** voor stroom die je **van het net afneemt** (import).
+> - `sensor.frank_current_return_price` is de **actuele terugleververgoeding** voor stroom die je **aan het net teruglevert** (export).
+> - Selecteer `sensor.frank_current_price` **niet** als de vergoeding voor teruglevering.
+> - Selecteer `sensor.frank_current_return_price` **niet** als de afnameprijs.
+
+### Netafname (verbruik)
+
+Dit is de **actuele stroomprijs** voor stroom die je **van het net afneemt**. In de configuratie van je elektriciteitsnet, onder **Kosten bijhouden**, kies je:
+
+```text
+Gebruik een entiteit met de actuele prijs
+```
+
+Selecteer vervolgens de entiteit die wordt weergegeven als **Current price**:
+
+```text
+sensor.frank_current_price
+```
+
+Deze sensor wordt gebruikt voor de **kosten van stroom die je van het net afneemt** en bevat de actuele afnameprijs (`total_price_eur_kwh`) als numerieke waarde in **EUR/kWh**, met de juiste metadata (`device_class: monetary`), zodat het Home Assistant Energy Dashboard hem als prijsentiteit accepteert. Er wordt bewust geen `state_class` ingesteld: dit is een actuele prijs, geen cumulatief totaal.
+
+### Teruglevering aan het net
+
+Dit is de **actuele terugleververgoeding** voor stroom die je **aan het net teruglevert**. In dezelfde configuratie, onder **Vergoeding exporteren**, kies je:
+
+```text
+Een entiteit met actuele vergoeding gebruiken
+```
+
+Selecteer vervolgens de entiteit die wordt weergegeven als **Current feed-in price**:
+
+```text
+sensor.frank_current_return_price
+```
+
+Deze sensor wordt gebruikt voor de **vergoeding van stroom die je aan het net teruglevert** en bevat de geschatte actuele **terugleverprijs** als numerieke waarde in **EUR/kWh**.
+
+Belangrijk om te weten:
+
+- Deze sensor is een **schatting**, tenzij de Frank API een expliciet terugleverprijsveld aanbiedt. Op de openbare API is dat op dit moment **niet** het geval, dus de waarde wordt berekend uit het geverifieerde marktprijsveld plus je ingestelde teruglevercorrectie.
+- Contractvoorwaarden kunnen verschillen — controleer de waarde altijd aan de hand van je eigen Frank Energie-contract.
+- De teruglevercorrectie mag **positief** (extra vergoeding), **negatief** (inhouding of terugleverkosten) of **nul** zijn.
+- De sensor past **geen** energiebelasting en **geen** saldering (net metering) toe.
+- De berekening staat los van het aflopen van de Nederlandse salderingsregeling op 1 januari 2027.
+
+De teruglevercorrectie en de btw-optie wijzig je via:
+
+```text
+Instellingen → Apparaten & Services → Frank Quarter Prices → Configureren
+```
+
+Het optievenster bevat twee instellingen:
+
+```text
+Teruglevercorrectie
+21% btw toepassen op terugleverprijs
+```
+
+De standaard teruglevercorrectie is `0.0 EUR/kWh` en de btw-optie staat standaard **uit**, zodat bestaande installaties zonder herconfiguratie exact dezelfde waarde blijven tonen.
+
+De sensor stelt daarnaast een paar stabiele attributen beschikbaar:
+
+```yaml
+market_price_source: market_price      # het gebruikte, geverifieerde prijsveld
+market_price: 0.08000                  # de ruwe marktprijs van het actieve blok
+feed_in_adjustment: 0.0                # de ingestelde teruglevercorrectie
+calculation_method: market_price_plus_adjustment
+```
+
+### Rekenvoorbeeld terugleverprijs
+
+De terugleverprijs wordt berekend op basis van de btw-optie.
+
+**Checkbox uit (standaard):**
+
+```text
+terugleverprijs = marktprijs + teruglevercorrectie
+```
+
+**Checkbox aan:**
+
+```text
+terugleverprijs = (marktprijs + teruglevercorrectie) × 1,21
+```
+
+De btw wordt dus toegepast op de volledige vergoeding: de marktprijs plus de ingestelde teruglevercorrectie.
+
+Voorbeeld met een positieve correctie (btw uit):
+
+```text
+Geverifieerde marktprijs: 0.080 EUR/kWh
+Ingestelde correctie:     0.018 EUR/kWh
+Geschatte terugleverprijs: 0.098 EUR/kWh
+```
+
+Voorbeeld met een negatieve correctie:
+
+```text
+Geverifieerde marktprijs: 0.080 EUR/kWh
+Ingestelde correctie:    -0.017 EUR/kWh
+Geschatte terugleverprijs: 0.063 EUR/kWh
+```
+
+De juiste correctie hangt af van je eigen contract. Beide voorbeelden zijn slechts illustratief en vertegenwoordigen **niet** het actuele Frank Energie-contract. Een negatieve terugleverprijs is mogelijk en wordt niet afgekapt naar nul.
+
+Voorbeeld met **21% btw toepassen op terugleverprijs** ingeschakeld:
+
+```text
+Geverifieerde marktprijs: 0.00323 EUR/kWh
+Ingestelde correctie:     0.01820 EUR/kWh
+Geschatte terugleverprijs: (0.00323 + 0.01820) × 1,21 = 0.0259303 EUR/kWh
+```
+
+Over de btw-optie:
+
+- De optie staat **standaard uitgeschakeld**; laat je hem uit, dan blijft de berekening exact zoals hierboven zonder btw.
+- **Controleer zelf** in je eigen Frank Energie-contract of afrekening of jouw terugleververgoeding inclusief of exclusief btw wordt berekend — jij blijft verantwoordelijk voor de keuze die bij jouw situatie past.
+- Het in- of uitschakelen is **niet** gekoppeld aan het kalenderjaar. De integratie zet de btw **niet** automatisch aan in 2026 of uit in 2027.
+- Btw-behandeling en de salderingsregeling zijn **losstaande** zaken. Het aflopen van de saldering bepaalt niet automatisch of er btw van toepassing is.
+
+> **Over het gebruikte prijsveld:** de openbare `marketPrices`-query levert `marketPrice`, `marketPriceTax`, `sourcingMarkupPrice` en `energyTaxPrice`. Verificatie tegen de live API wees uit dat `marketPriceTax` exact 21% btw over `marketPrice` is (een kostenpost aan de *afname*kant) en dat er geen expliciet terugleverveld bestaat. Daarom gebruikt de integratie bewust alleen de ruwe `marketPrice` (zonder btw, energiebelasting of inkoopopslag) als basis voor de terugleverprijs.
 
 ---
 
