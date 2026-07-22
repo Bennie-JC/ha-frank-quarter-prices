@@ -82,7 +82,15 @@ class FrankQuarterPricesCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             tomorrow_prices = []
 
         resolution_minutes = self._detect_resolution(today_prices or tomorrow_prices)
-        current_price = self._determine_current_price(today_prices, now)
+        # Select the single active price block once and derive the current price
+        # from it, so every current-price consumer (purchase and feed-in) shares
+        # the exact same block without a second lookup or a second API request.
+        current_price_block = self._determine_current_block(today_prices, now)
+        current_price = (
+            current_price_block.get("total_price_eur_kwh")
+            if current_price_block is not None
+            else None
+        )
 
         _LOGGER.debug(
             "Update: today=%d blocks, tomorrow=%d blocks (available=%s), "
@@ -98,6 +106,7 @@ class FrankQuarterPricesCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "tomorrow": tomorrow_prices,
             "tomorrow_available": tomorrow_available,
             "current_price": current_price,
+            "current_price_block": current_price_block,
             "resolution_minutes": resolution_minutes,
             "last_update": now,
             "last_attempt": now,
@@ -127,17 +136,25 @@ class FrankQuarterPricesCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return DEFAULT_RESOLUTION_MINUTES
 
     @staticmethod
-    def _determine_current_price(
+    def _determine_current_block(
         prices: list[dict[str, Any]], now: datetime
-    ) -> float | None:
-        """Return the total price for the currently active time slot."""
+    ) -> dict[str, Any] | None:
+        """Return the price block for the currently active time slot."""
         for price in prices:
             start = price.get("from")
             end = price.get("till")
             if isinstance(start, datetime) and isinstance(end, datetime):
                 if start <= now < end:
-                    return price.get("total_price_eur_kwh")
+                    return price
         return None
+
+    @classmethod
+    def _determine_current_price(
+        cls, prices: list[dict[str, Any]], now: datetime
+    ) -> float | None:
+        """Return the total price for the currently active time slot."""
+        block = cls._determine_current_block(prices, now)
+        return block.get("total_price_eur_kwh") if block is not None else None
 
     # --- Helper methods ----------------------------------------------------
 
