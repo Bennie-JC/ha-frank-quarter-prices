@@ -2,7 +2,7 @@
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
 [![GitHub release](https://img.shields.io/github/v/release/Bennie-JC/ha-frank-quarter-prices?display_name=tag&sort=semver&color=blue)](https://github.com/Bennie-JC/ha-frank-quarter-prices/releases/latest)
-[![GitHub downloads](https://img.shields.io/github/downloads/Bennie-JC/ha-frank-quarter-prices/total?color=41BDF5&label=downloads)](https://github.com/Bennie-JC/ha-frank-quarter-prices/releases)
+[![GitHub downloads](https://img.shields.io/github/downloads/Bennie-JC/ha-frank-quarter-prices/latest/total?style=flat&color=blue)](https://github.com/Bennie-JC/ha-frank-quarter-prices/releases/latest)
 [![GitHub stars](https://img.shields.io/github/stars/Bennie-JC/ha-frank-quarter-prices?style=flat&color=yellow)](https://github.com/Bennie-JC/ha-frank-quarter-prices/stargazers)
 [![GitHub issues](https://img.shields.io/github/issues/Bennie-JC/ha-frank-quarter-prices?color=orange)](https://github.com/Bennie-JC/ha-frank-quarter-prices/issues)
 [![GitHub last commit](https://img.shields.io/github/last-commit/Bennie-JC/ha-frank-quarter-prices?color=blueviolet)](https://github.com/Bennie-JC/ha-frank-quarter-prices/commits/main)
