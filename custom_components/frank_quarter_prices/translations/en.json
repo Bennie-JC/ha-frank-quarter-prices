@@ -12,5 +12,20 @@
     "abort": {
       "already_configured": "This country is already configured"
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Frank Quarter Prices",
+        "data": {
+          "feed_in_adjustment": "Feed-in adjustment",
+          "apply_feed_in_vat": "Apply 21% VAT to feed-in price"
+        },
+        "data_description": {
+          "feed_in_adjustment": "The amount in EUR/kWh added to the verified current market price to calculate the estimated feed-in price. Use a positive value for an additional compensation, a negative value for a deduction, or zero to use the market price unchanged. Contract conditions may differ.",
+          "apply_feed_in_vat": "Enable this when the feed-in compensation should be calculated including 21% VAT. VAT is applied to the market price plus the configured feed-in adjustment. Leave this disabled when your compensation is calculated excluding VAT. Verify this against your own Frank Energie contract or statement."
+        }
+      }
+    }
   }
 }

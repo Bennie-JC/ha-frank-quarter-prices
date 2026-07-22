@@ -7,8 +7,18 @@ from typing import Any
 
 import voluptuous as vol
 
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import (
+    ConfigEntry,
+    ConfigFlow,
+    ConfigFlowResult,
+    OptionsFlow,
+)
+from homeassistant.core import callback
 from homeassistant.helpers.selector import (
+    BooleanSelector,
+    NumberSelector,
+    NumberSelectorConfig,
+    NumberSelectorMode,
     SelectOptionDict,
     SelectSelector,
     SelectSelectorConfig,
@@ -16,10 +26,18 @@ from homeassistant.helpers.selector import (
 )
 
 from .const import (
+    CONF_APPLY_FEED_IN_VAT,
     CONF_COUNTRY,
+    CONF_FEED_IN_ADJUSTMENT,
+    DEFAULT_APPLY_FEED_IN_VAT,
     DEFAULT_COUNTRY,
+    DEFAULT_FEED_IN_ADJUSTMENT,
     DEFAULT_NAME,
     DOMAIN,
+    FEED_IN_ADJUSTMENT_STEP,
+    MAX_FEED_IN_ADJUSTMENT,
+    MIN_FEED_IN_ADJUSTMENT,
+    PRICE_UNIT_EUR_KWH,
     SUPPORTED_COUNTRIES,
 )
 
@@ -75,3 +93,53 @@ class FrankQuarterPricesConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="user",
             data_schema=STEP_USER_DATA_SCHEMA,
         )
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(
+        config_entry: ConfigEntry,
+    ) -> FrankQuarterPricesOptionsFlow:
+        """Return the options flow handler."""
+        return FrankQuarterPricesOptionsFlow()
+
+
+class FrankQuarterPricesOptionsFlow(OptionsFlow):
+    """Handle the options flow for Frank Quarter Prices.
+
+    The options are the feed-in adjustment and an optional 21% VAT toggle.
+    Neither is required during the initial setup, and existing entries without
+    them fall back to their defaults (0.0 adjustment, VAT disabled).
+    """
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Manage the feed-in adjustment and VAT options."""
+        if user_input is not None:
+            return self.async_create_entry(data=user_input)
+
+        current_adjustment = self.config_entry.options.get(
+            CONF_FEED_IN_ADJUSTMENT, DEFAULT_FEED_IN_ADJUSTMENT
+        )
+        current_vat = self.config_entry.options.get(
+            CONF_APPLY_FEED_IN_VAT, DEFAULT_APPLY_FEED_IN_VAT
+        )
+        options_schema = vol.Schema(
+            {
+                vol.Optional(
+                    CONF_FEED_IN_ADJUSTMENT, default=current_adjustment
+                ): NumberSelector(
+                    NumberSelectorConfig(
+                        min=MIN_FEED_IN_ADJUSTMENT,
+                        max=MAX_FEED_IN_ADJUSTMENT,
+                        step=FEED_IN_ADJUSTMENT_STEP,
+                        unit_of_measurement=PRICE_UNIT_EUR_KWH,
+                        mode=NumberSelectorMode.BOX,
+                    )
+                ),
+                vol.Optional(
+                    CONF_APPLY_FEED_IN_VAT, default=current_vat
+                ): BooleanSelector(),
+            }
+        )
+        return self.async_show_form(step_id="init", data_schema=options_schema)

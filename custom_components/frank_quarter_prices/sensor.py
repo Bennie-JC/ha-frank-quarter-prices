@@ -11,8 +11,16 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util import dt as dt_util
 
+from .const import FEED_IN_VAT_RATE, PRICE_UNIT_EUR_KWH
 from .coordinator import FrankQuarterPricesCoordinator
 from .entity import FrankQuarterPricesEntity
+from .price import (
+    MARKET_PRICE_FIELD,
+    calculate_feed_in_price,
+    calculation_method,
+    get_apply_feed_in_vat,
+    get_feed_in_adjustment,
+)
 
 if TYPE_CHECKING:
     from . import FrankQuarterPricesConfigEntry
@@ -95,6 +103,7 @@ async def async_setup_entry(
 
     entities: list[SensorEntity] = [
         FrankCurrentPriceSensor(coordinator),
+        FrankCurrentReturnPriceSensor(coordinator),
         FrankPricesTodaySensor(coordinator),
         FrankPricesTomorrowSensor(coordinator),
     ]
@@ -123,10 +132,17 @@ async def async_setup_entry(
 
 
 class FrankCurrentPriceSensor(FrankQuarterPricesEntity, SensorEntity):
-    """Sensor exposing the current electricity price."""
+    """Sensor exposing the current electricity purchase price.
+
+    Suitable as the "current electricity price" entity for the Home Assistant
+    Energy Dashboard: monetary device class, EUR/kWh. No ``state_class`` is set:
+    this is an instantaneous price, not a cumulative total, and the Energy
+    Dashboard current-price selector does not require one. The state stays
+    numeric (``total_price_eur_kwh``) or unavailable.
+    """
 
     _attr_device_class = SensorDeviceClass.MONETARY
-    _attr_native_unit_of_measurement = "EUR/kWh"
+    _attr_native_unit_of_measurement = PRICE_UNIT_EUR_KWH
 
     def __init__(self, coordinator: FrankQuarterPricesCoordinator) -> None:
         """Initialize the current price sensor."""
@@ -144,16 +160,80 @@ class FrankCurrentPriceSensor(FrankQuarterPricesEntity, SensorEntity):
 
     def _current_block(self) -> dict[str, Any] | None:
         """Return the price block matching the current time slot."""
-        data = self.coordinator.data or {}
-        now = data.get("last_update")
-        if now is None:
-            return None
-        for block in data.get("today", []):
-            start = block.get("from")
-            end = block.get("till")
-            if start is not None and end is not None and start <= now < end:
-                return block
-        return None
+        return (self.coordinator.data or {}).get("current_price_block")
+
+
+class FrankCurrentReturnPriceSensor(FrankQuarterPricesEntity, SensorEntity):
+    """Sensor exposing the estimated current electricity feed-in price.
+
+    The value is the verified current market price plus the configured feed-in
+    adjustment (see :mod:`.price`). It reuses the active price block selected by
+    the coordinator and never performs its own API request. Suitable as the
+    "return to grid" current-price entity for the Energy Dashboard.
+
+    Like the purchase-price sensor, it uses the monetary device class and
+    EUR/kWh but no ``state_class`` (an instantaneous price, not a total).
+    """
+
+    _attr_device_class = SensorDeviceClass.MONETARY
+    _attr_native_unit_of_measurement = PRICE_UNIT_EUR_KWH
+
+    def __init__(self, coordinator: FrankQuarterPricesCoordinator) -> None:
+        """Initialize the current feed-in price sensor."""
+        super().__init__(coordinator, "current_return_price", "Current feed-in price")
+
+    @property
+    def suggested_object_id(self) -> str:
+        """Force the entity id to ``sensor.frank_current_return_price``.
+
+        The friendly name is "Current feed-in price", but the stable entity id
+        uses the neutral "return price" wording that pairs with the Energy
+        Dashboard's "return to grid" option. Home Assistant prepends the device
+        name ("Frank"), so only the entity-name part is returned here.
+        """
+        return "Current return price"
+
+    def _current_block(self) -> dict[str, Any] | None:
+        """Return the active price block selected by the coordinator."""
+        return (self.coordinator.data or {}).get("current_price_block")
+
+    def _adjustment(self) -> float:
+        """Return the configured feed-in adjustment (default 0.0)."""
+        return get_feed_in_adjustment(self.coordinator.entry.options)
+
+    def _apply_vat(self) -> bool:
+        """Return whether 21% VAT should be applied (default False)."""
+        return get_apply_feed_in_vat(self.coordinator.entry.options)
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the estimated current feed-in price, or None if unavailable."""
+        return calculate_feed_in_price(
+            self._current_block(), self._adjustment(), self._apply_vat()
+        )
+
+    @property
+    def available(self) -> bool:
+        """Available only when a feed-in price can be calculated."""
+        if not super().available:
+            return False
+        return self.native_value is not None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return the source field, market price, adjustment, VAT and method."""
+        block = self._current_block()
+        if block is None:
+            return {}
+        apply_vat = self._apply_vat()
+        return {
+            "market_price_source": MARKET_PRICE_FIELD,
+            "market_price": block.get(MARKET_PRICE_FIELD),
+            "feed_in_adjustment": self._adjustment(),
+            "apply_vat": apply_vat,
+            "vat_rate": FEED_IN_VAT_RATE,
+            "calculation_method": calculation_method(block, apply_vat),
+        }
 
 
 class FrankPricesTodaySensor(FrankQuarterPricesEntity, SensorEntity):

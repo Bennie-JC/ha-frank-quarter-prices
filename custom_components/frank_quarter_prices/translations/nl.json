@@ -12,5 +12,20 @@
     "abort": {
       "already_configured": "Dit land is al geconfigureerd"
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Frank Quarter Prices",
+        "data": {
+          "feed_in_adjustment": "Teruglevercorrectie",
+          "apply_feed_in_vat": "21% btw toepassen op terugleverprijs"
+        },
+        "data_description": {
+          "feed_in_adjustment": "Het bedrag in EUR/kWh dat bij de geverifieerde actuele marktprijs wordt opgeteld om de geschatte terugleverprijs te berekenen. Gebruik een positieve waarde voor een extra vergoeding, een negatieve waarde voor een inhouding en nul om de marktprijs ongewijzigd te gebruiken. Contractvoorwaarden kunnen verschillen.",
+          "apply_feed_in_vat": "Schakel dit in wanneer de terugleververgoeding inclusief 21% btw moet worden berekend. De btw wordt toegepast op de marktprijs plus de ingestelde teruglevercorrectie. Laat dit uitgeschakeld wanneer jouw vergoeding exclusief btw wordt berekend. Controleer dit in je eigen Frank Energie-contract of afrekening."
+        }
+      }
+    }
   }
 }
