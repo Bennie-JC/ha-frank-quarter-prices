@@ -5,6 +5,21 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.3] - 2026-07-22
+
+### Added
+
+- Home Assistant Energy Dashboard support for `sensor.frank_current_price` as the current electricity purchase-price entity.
+- New `sensor.frank_current_return_price` entity exposing the estimated current electricity feed-in price.
+- Configurable **feed-in adjustment** through the integration options (positive, negative or zero; default `0.0 EUR/kWh`).
+- Optionele instelling toegevoegd om 21% btw toe te passen op de berekende terugleverprijs (standaard uitgeschakeld).
+- Dutch and English translations for the new options.
+- Energy Dashboard setup instructions and a feed-in-price calculation example in the README.
+
+### Changed
+
+- The feed-in-price calculation uses the Frank API's verified raw `market_price` field (the EPEX/spot price, excluding VAT, energy tax and markups) plus the configured adjustment. It does **not** assume VAT (`market_price_tax`), energy tax or purchase-price components apply to electricity returned to the grid. Verified against the live public API: `market_price_tax` is 21% VAT charged on the purchase side, and the public endpoint exposes no explicit feed-in-price field.
+
 ## [0.1.2] - 2026-06-21
 
 ### Added
@@ -57,6 +72,8 @@ Initial release.
 - Diagnostics support with secrets redacted.
 - HACS compatibility (`hacs.json`) and documentation.
 
+[0.1.3]: https://github.com/Bennie-JC/ha-frank-quarter-prices/releases/tag/v0.1.3
+[0.1.2]: https://github.com/Bennie-JC/ha-frank-quarter-prices/releases/tag/v0.1.2
 [0.1.1]: https://github.com/Bennie-JC/ha-frank-quarter-prices/releases/tag/v0.1.1
 [0.1.0]: https://github.com/Bennie-JC/ha-frank-quarter-prices/releases/tag/v0.1.0
 
