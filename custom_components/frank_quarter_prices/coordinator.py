@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
 import logging
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.core import HomeAssistant
@@ -169,9 +169,12 @@ class FrankQuarterPricesCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         for price in prices:
             start = price.get("from")
             end = price.get("till")
-            if isinstance(start, datetime) and isinstance(end, datetime):
-                if start <= now < end:
-                    return price
+            if (
+                isinstance(start, datetime)
+                and isinstance(end, datetime)
+                and start <= now < end
+            ):
+                return price
         return None
 
     @classmethod

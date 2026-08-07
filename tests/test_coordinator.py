@@ -14,15 +14,13 @@ from datetime import datetime, timedelta
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
-from freezegun import freeze_time
 import pytest
-
+from freezegun import freeze_time
+from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
     async_fire_time_changed,
 )
-
-from homeassistant.util import dt as dt_util
 
 from custom_components.frank_quarter_prices.const import DOMAIN
 

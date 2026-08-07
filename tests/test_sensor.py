@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from homeassistant.components.sensor import ATTR_STATE_CLASS, SensorDeviceClass
 from homeassistant.const import ATTR_DEVICE_CLASS, ATTR_UNIT_OF_MEASUREMENT
 from homeassistant.helpers import entity_registry as er

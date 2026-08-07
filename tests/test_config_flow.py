@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from homeassistant.data_entry_flow import FlowResultType, InvalidData
 
 from custom_components.frank_quarter_prices.const import (

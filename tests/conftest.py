@@ -12,14 +12,13 @@ import sys
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
-from datetime import datetime, timedelta  # noqa: E402
-from typing import Any  # noqa: E402
-from unittest.mock import AsyncMock, patch  # noqa: E402
+from datetime import datetime, timedelta
+from typing import Any
+from unittest.mock import AsyncMock, patch
 
-import pytest  # noqa: E402
-import pytest_socket  # noqa: E402
-
-from homeassistant.util import dt as dt_util  # noqa: E402
+import pytest
+import pytest_socket
+from homeassistant.util import dt as dt_util
 
 # On Windows every asyncio event loop creates an ``AF_INET`` socket for its
 # self-pipe, which pytest_socket (enabled by pytest-homeassistant) blocks. On
