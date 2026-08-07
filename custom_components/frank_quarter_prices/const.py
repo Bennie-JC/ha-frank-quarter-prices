@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
 from typing import Final
 
 DOMAIN: Final = "frank_quarter_prices"
@@ -48,8 +47,15 @@ COUNTRY_BE: Final = "BE"
 SUPPORTED_COUNTRIES: Final[tuple[str, ...]] = (COUNTRY_NL, COUNTRY_BE)
 DEFAULT_COUNTRY: Final = COUNTRY_NL
 
-# Default polling interval for the coordinator.
-DEFAULT_SCAN_INTERVAL: Final = timedelta(minutes=15)
+# The coordinator refreshes on these wall-clock minute boundaries rather than on
+# a free-running interval, so the active price block and the today/tomorrow
+# rollover never lag behind the real quarter-hour change (see coordinator.py).
+QUARTER_BOUNDARY_MINUTES: Final[tuple[int, ...]] = (0, 15, 30, 45)
+
+# Small buffer after each boundary before refreshing, to be robust against
+# minor clock skew between Home Assistant and the Frank API rather than racing
+# the exact boundary instant.
+QUARTER_TICK_OFFSET_SECONDS: Final = 3
 
 # Default integration title used in the config flow.
 DEFAULT_NAME: Final = "Frank Quarter Prices"

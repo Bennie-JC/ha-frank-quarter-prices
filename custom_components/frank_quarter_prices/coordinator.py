@@ -7,10 +7,11 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.event import async_track_time_change
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
-from .const import DEFAULT_SCAN_INTERVAL, DOMAIN
+from .const import DOMAIN, QUARTER_BOUNDARY_MINUTES, QUARTER_TICK_OFFSET_SECONDS
 from .frank_client import FrankClient, FrankClientAuthError, FrankClientError
 
 if TYPE_CHECKING:
@@ -43,8 +44,33 @@ class FrankQuarterPricesCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             _LOGGER,
             config_entry=entry,
             name=DOMAIN,
-            update_interval=DEFAULT_SCAN_INTERVAL,
+            # No free-running interval: a plain ``timedelta`` interval starts
+            # counting from config-entry setup, so it drifts out of sync with
+            # the actual quarter-hour boundaries and the active price block
+            # (and the today/tomorrow rollover) can lag behind by up to almost
+            # 15 minutes. Refreshes are driven by the wall clock instead, via
+            # the time-change listener registered below.
+            update_interval=None,
         )
+
+        entry.async_on_unload(
+            async_track_time_change(
+                hass,
+                self._handle_quarter_tick,
+                minute=list(QUARTER_BOUNDARY_MINUTES),
+                second=QUARTER_TICK_OFFSET_SECONDS,
+            )
+        )
+
+    async def _handle_quarter_tick(self, now: datetime) -> None:
+        """Refresh right after each wall-clock quarter-hour boundary.
+
+        Uses ``async_refresh`` rather than ``async_request_refresh``: the
+        latter is debounced by a ~10s cooldown, which would reintroduce a
+        window where the boundary has passed but the cached block is still
+        the previous quarter's.
+        """
+        await self.async_refresh()
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch today's and tomorrow's prices from the Frank API."""

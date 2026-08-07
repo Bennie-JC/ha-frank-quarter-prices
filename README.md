@@ -1,8 +1,9 @@
 # Frank Energie Kwartierprijzen voor Home Assistant (Custom Component)
 
-[![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
+[![hacs_badge](https://img.shields.io/badge/HACS-Default-41BDF5.svg)](https://github.com/hacs/default)
 [![GitHub release](https://img.shields.io/github/v/release/Bennie-JC/ha-frank-quarter-prices?display_name=tag&sort=semver&color=blue)](https://github.com/Bennie-JC/ha-frank-quarter-prices/releases/latest)
-[![GitHub downloads](https://img.shields.io/github/downloads/Bennie-JC/ha-frank-quarter-prices/latest/total?style=flat&color=blue)](https://github.com/Bennie-JC/ha-frank-quarter-prices/releases/latest)
+[![HACS validation](https://github.com/Bennie-JC/ha-frank-quarter-prices/actions/workflows/hacs.yml/badge.svg)](https://github.com/Bennie-JC/ha-frank-quarter-prices/actions/workflows/hacs.yml)
+[![Hassfest](https://github.com/Bennie-JC/ha-frank-quarter-prices/actions/workflows/hassfest.yml/badge.svg)](https://github.com/Bennie-JC/ha-frank-quarter-prices/actions/workflows/hassfest.yml)
 [![GitHub stars](https://img.shields.io/github/stars/Bennie-JC/ha-frank-quarter-prices?style=flat&color=yellow)](https://github.com/Bennie-JC/ha-frank-quarter-prices/stargazers)
 [![GitHub issues](https://img.shields.io/github/issues/Bennie-JC/ha-frank-quarter-prices?color=orange)](https://github.com/Bennie-JC/ha-frank-quarter-prices/issues)
 [![GitHub last commit](https://img.shields.io/github/last-commit/Bennie-JC/ha-frank-quarter-prices?color=blueviolet)](https://github.com/Bennie-JC/ha-frank-quarter-prices/commits/main)
@@ -63,15 +64,14 @@ Een Home Assistant **custom component** die de **dynamische marktprijzen voor st
 
 ### HACS-installatie (aanbevolen)
 
+Deze integratie is opgenomen in **HACS Default** en is direct doorzoekbaar in HACS — een aangepaste repository toevoegen is niet nodig.
+
 1. Zorg dat [HACS](https://hacs.xyz/) geïnstalleerd is.
-2. Ga in Home Assistant naar **HACS → Integraties → ⋮ (rechtsboven) → Aangepaste repositories**.
-3. Voeg de repository-URL toe:
-   ```
-   https://github.com/Bennie-JC/ha-frank-quarter-prices
-   ```
-   en kies de categorie **Integratie**.
-4. Zoek naar **Frank Quarter Prices** in HACS en klik op **Downloaden**.
-5. **Herstart Home Assistant**.
+2. Ga in Home Assistant naar **HACS → Integraties**.
+3. Zoek naar **Frank Quarter Prices** en klik op **Downloaden**.
+4. **Herstart Home Assistant**.
+
+> Zie je de integratie nog niet direct staan? Herlaad de HACS-cache (**HACS → ⋮ rechtsboven → HACS opnieuw laden**). Als fallback kun je de repository ook tijdelijk handmatig toevoegen via **HACS → Integraties → ⋮ (rechtsboven) → Aangepaste repositories** met de URL `https://github.com/Bennie-JC/ha-frank-quarter-prices` (categorie **Integratie**).
 
 ### Handmatige installatie
 

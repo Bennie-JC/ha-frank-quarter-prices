@@ -5,6 +5,18 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.4] - 2026-08-07
+
+### Fixed
+
+- Synchroniseert prijsupdates nu met de echte kwartiergrenzen (`:00`/`:15`/`:30`/`:45`) in plaats van met een vrijlopend interval dat begon te tellen vanaf het opstarten van de integratie ([#2](https://github.com/Bennie-JC/ha-frank-quarter-prices/issues/2)).
+- Voorkomt dat de actuele kwartierprijs tot circa 14 minuten kan achterlopen op de werkelijke kwartiergrens.
+- Verbetert de today/tomorrow-rollover rond middernacht: de nieuwe dag wordt vlak na 00:00 opgehaald in plaats van pas tot ~14 minuten later.
+
+### Compatibility
+
+- Bestaande entity ID's, unique ID's, de volledige 15-minutenprijsdata, de today/tomorrow-datastructuren en de EMS-facing attributen zijn ongewijzigd. Alleen het ververstijdstip van de coordinator is aangepast.
+
 ## [0.1.3] - 2026-07-22
 
 ### Added
@@ -72,9 +84,8 @@ Initial release.
 - Diagnostics support with secrets redacted.
 - HACS compatibility (`hacs.json`) and documentation.
 
+[0.1.4]: https://github.com/Bennie-JC/ha-frank-quarter-prices/releases/tag/v0.1.4
 [0.1.3]: https://github.com/Bennie-JC/ha-frank-quarter-prices/releases/tag/v0.1.3
 [0.1.2]: https://github.com/Bennie-JC/ha-frank-quarter-prices/releases/tag/v0.1.2
 [0.1.1]: https://github.com/Bennie-JC/ha-frank-quarter-prices/releases/tag/v0.1.1
-[0.1.0]: https://github.com/Bennie-JC/ha-frank-quarter-prices/releases/tag/v0.1.0
-
 [0.1.0]: https://github.com/Bennie-JC/ha-frank-quarter-prices/releases/tag/v0.1.0
