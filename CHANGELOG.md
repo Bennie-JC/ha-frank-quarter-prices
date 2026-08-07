@@ -5,6 +5,28 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.5] - 2026-08-08
+
+### Fixed
+
+- Scheidt het ophalen van de dagreeksen van het berekenen van het actieve kwartier. De gepubliceerde prijslijsten worden per lokale kalenderdag gecachet en alleen nog opgevraagd wanneer ze ontbreken; elke andere kwartiertik leidt het actieve blok lokaal af uit de cache ([#3](https://github.com/Bennie-JC/ha-frank-quarter-prices/issues/3)).
+- Een mislukte aanvraag voor morgen zet niet langer álle prijssensoren op `unavailable`. Zolang er geldige prijsdata voor vandaag bekend is, blijft de integratie bruikbaar en blijft de actuele kwartierprijs kloppen.
+- Vraagt de prijzen voor morgen pas vanaf 12:00 lokale tijd op. Frank publiceert ze kort na de SDAC-veiling van 12:00 CET, dus elke aanvraag daarvoor was een gegarandeerde misser.
+- De rollover om middernacht kost geen enkele aanvraag meer: de dag die 's middags al als "morgen" is opgehaald, wordt zonder netwerkverkeer de nieuwe "vandaag".
+- Beoordeelt de volledigheid van een dag aan de hand van de echte lokale dagrand in plaats van een vast aantal blokken, zodat de 23-uurs- en 25-uursdag rond de zomertijdovergang correct valideren. De vergelijking gebeurt op absolute UTC-momenten, zodat het dubbel voorkomende uur bij de overgang naar wintertijd correct wordt afgehandeld.
+- Een onvolledig antwoord wordt niet als volledige dag gecachet en vervangt nooit een reeds bekende volledige dag. Twee onvolledige antwoorden worden per tijdvak samengevoegd in plaats van dat de langste lijst wint, zodat een verse deellijst die het actieve kwartier wél bevat niet verloren gaat.
+- De actuele prijs wordt nooit afgeleid uit een ander kwartier dan het kwartier dat op dat moment werkelijk actief is. Ontbreekt het actieve kwartier in de bekende data, dan is de actuele prijs onbekend in plaats van een verouderde of toekomstige waarde.
+
+### Changed
+
+- Het aantal API-aanvragen daalt fors. Onder normale omstandigheden wordt elke kalenderdag ongeveer één keer opgehaald in plaats van bij iedere kwartiertik; bij storingen kan het herhaalgedrag dat aantal legitiem verhogen.
+- README: de publicatietijd van de prijzen voor morgen gecorrigeerd naar de vroege middag in plaats van ~15:00 CET.
+- README: HACS Default duidelijker als primaire installatie- en updatemethode, en een "Add Integration"-knop van My Home Assistant toegevoegd voor het toevoegen van de integratie na installatie.
+
+### Compatibility
+
+- Bestaande entity ID's, unique ID's, namen, eenheden, device classes, attributen en de today/tomorrow-datastructuren zijn ongewijzigd. De kwartiergrens-synchronisatie uit v0.1.4 blijft intact. Alleen het ophaalgedrag van de coordinator is aangepast.
+
 ## [0.1.4] - 2026-08-07
 
 ### Fixed

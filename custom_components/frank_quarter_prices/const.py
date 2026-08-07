@@ -57,6 +57,24 @@ QUARTER_BOUNDARY_MINUTES: Final[tuple[int, ...]] = (0, 15, 30, 45)
 # the exact boundary instant.
 QUARTER_TICK_OFFSET_SECONDS: Final = 3
 
+# Earliest local hour at which tomorrow's prices are requested.
+#
+# Frank publishes the day-ahead prices shortly after the 12:00 CET SDAC auction
+# closes; they were observed appearing between 13:13 and 13:51 local time. Every
+# request before publication is a guaranteed miss, so the coordinator does not
+# ask for tomorrow before this hour. 12 rather than 13 leaves margin for an
+# earlier-than-usual publication.
+TOMORROW_PUBLISH_HOUR: Final = 12
+
+# Minimum delay between tomorrow requests once they keep failing.
+#
+# A "not published yet" response is cheap and is retried on the next quarter
+# tick, so tomorrow shows up within 15 minutes of publication. A single failed
+# request is retried on the next tick too, so a blip costs nothing. Only from
+# the second consecutive failure does this backoff engage, so a sustained
+# outage cannot turn every remaining quarter tick of the day into a request.
+TOMORROW_ERROR_BACKOFF_MINUTES: Final = 30
+
 # Default integration title used in the config flow.
 DEFAULT_NAME: Final = "Frank Quarter Prices"
 

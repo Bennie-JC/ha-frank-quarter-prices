@@ -6,6 +6,11 @@ of to the wall-clock quarter-hour boundaries. Whatever offset existed at
 startup persisted, so ``current_price`` (and the today/tomorrow rollover)
 could lag up to ~14 minutes behind the real quarter change. The fix drives
 refreshes from ``async_track_time_change`` on :00/:15/:30/:45 instead.
+
+Since issue #3 a refresh no longer implies an API request — most ticks derive
+the active block from the daily cache — so these tests count *refreshes* via
+``refresh_spy`` rather than client calls. The request behaviour itself is
+covered in ``test_coordinator_cache.py``.
 """
 
 from __future__ import annotations
@@ -23,6 +28,9 @@ from pytest_homeassistant_custom_component.common import (
 )
 
 from custom_components.frank_quarter_prices.const import DOMAIN
+from custom_components.frank_quarter_prices.coordinator import (
+    FrankQuarterPricesCoordinator,
+)
 
 from .conftest import build_block
 
@@ -71,6 +79,27 @@ def stepped_client():
 
 
 @pytest.fixture
+def refresh_spy():
+    """Record the local time of every coordinator refresh.
+
+    Scheduling is what these tests are about, and a refresh is no longer
+    observable through the client mock: a tick that finds both days cached
+    performs zero requests. Counting the coordinator's own update instead
+    keeps the issue #2 assertions exact, and additionally pins down *when*
+    each refresh landed.
+    """
+    original = FrankQuarterPricesCoordinator._async_update_data
+    refreshes: list[datetime] = []
+
+    async def counting(self):
+        refreshes.append(dt_util.now())
+        return await original(self)
+
+    with patch.object(FrankQuarterPricesCoordinator, "_async_update_data", counting):
+        yield refreshes
+
+
+@pytest.fixture
 def mock_config_entry():
     """Return a mock config entry for the NL integration."""
     return MockConfigEntry(
@@ -91,7 +120,7 @@ async def _setup_at(hass, entry, start: datetime) -> None:
 
 
 async def test_refresh_is_aligned_to_wallclock_not_setup_time(
-    hass, mock_config_entry, stepped_client
+    hass, mock_config_entry, stepped_client, refresh_spy
 ):
     """Issue #2 reproduction: setup at a non-boundary time must not offset polling.
 
@@ -105,20 +134,21 @@ async def test_refresh_is_aligned_to_wallclock_not_setup_time(
     frozen_time = freezer.start()
     try:
         await _setup_at(hass, mock_config_entry, start)
-        assert stepped_client.call_count == 2  # initial today + tomorrow
+        assert refresh_spy == [start]  # the initial refresh
 
         # Old behaviour would refresh at setup+15min = 10:22. Confirm no
         # refresh has happened yet just before the *real* boundary at 10:15.
         frozen_time.move_to(start + timedelta(minutes=7, seconds=59))
         async_fire_time_changed(hass)
         await hass.async_block_till_done()
-        assert stepped_client.call_count == 2
+        assert refresh_spy == [start]
 
         # The real quarter boundary (plus the small offset) must refresh.
-        frozen_time.move_to(start.replace(minute=15, second=3, microsecond=0))
+        boundary = start.replace(minute=15, second=3, microsecond=0)
+        frozen_time.move_to(boundary)
         async_fire_time_changed(hass)
         await hass.async_block_till_done()
-        assert stepped_client.call_count == 4
+        assert refresh_spy == [start, boundary]
     finally:
         freezer.stop()
 
@@ -242,7 +272,7 @@ async def test_tomorrow_unavailable_then_available_after_quarter_tick(
 
 
 async def test_no_refresh_scheduled_off_boundary_after_reload(
-    hass, mock_config_entry, stepped_client
+    hass, mock_config_entry, stepped_client, refresh_spy
 ):
     """Reloading the entry must re-anchor to the wall clock, not accumulate listeners.
 
@@ -255,26 +285,24 @@ async def test_no_refresh_scheduled_off_boundary_after_reload(
     frozen_time = freezer.start()
     try:
         await _setup_at(hass, mock_config_entry, start)
-        assert stepped_client.call_count == 2
+        assert len(refresh_spy) == 1
 
         await hass.config_entries.async_reload(mock_config_entry.entry_id)
         await hass.async_block_till_done()
-        assert (
-            stepped_client.call_count == 4
-        )  # first refresh, then reload's first refresh
+        # First refresh, then the reload's first refresh.
+        assert len(refresh_spy) == 2
 
         frozen_time.move_to(start.replace(minute=15, second=3, microsecond=0))
         async_fire_time_changed(hass)
         await hass.async_block_till_done()
-        # Exactly one more refresh (today+tomorrow), not a doubled-up one from
-        # a leaked listener.
-        assert stepped_client.call_count == 6
+        # Exactly one more refresh, not a doubled-up one from a leaked listener.
+        assert len(refresh_spy) == 3
     finally:
         freezer.stop()
 
 
 async def test_quarter_tick_survives_dst_spring_forward(
-    hass, mock_config_entry, stepped_client
+    hass, mock_config_entry, stepped_client, refresh_spy
 ):
     """The wall-clock scheduler must keep firing correctly across a DST change.
 
@@ -289,7 +317,7 @@ async def test_quarter_tick_survives_dst_spring_forward(
     frozen_time = freezer.start()
     try:
         await _setup_at(hass, mock_config_entry, start)
-        assert stepped_client.call_count == 2
+        assert len(refresh_spy) == 1
 
         # Local wall clock jumps from 01:59:59 CET straight to 03:00:00 CEST.
         after_jump = datetime(2026, 3, 29, 3, 0, 3, tzinfo=tz)
@@ -297,7 +325,7 @@ async def test_quarter_tick_survives_dst_spring_forward(
         async_fire_time_changed(hass)
         await hass.async_block_till_done()
 
-        assert stepped_client.call_count == 4
+        assert refresh_spy[-1] == after_jump
         state = hass.states.get(CURRENT_PRICE)
         assert state is not None
         assert state.state not in ("unknown", "unavailable")

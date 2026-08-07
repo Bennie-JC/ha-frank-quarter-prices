@@ -13,7 +13,7 @@
 
 Een Home Assistant **custom component** die de **dynamische marktprijzen voor stroom van Frank Energie** ontsluit — inclusief **kwartierprijzen (15 minuten)** resolutie — als een compacte set sensoren, ontworpen als een zuivere **prijsbron voor een energiemanagementsysteem (EMS)**.
 
-> Deze integratie haalt elke 15 minuten de openbare Frank Energie GraphQL API op en levert de prijzen van vandaag en morgen, de huidige prijs en het goedkoopste en duurste prijsvenster van elke dag. De volledige prijsreeksen zijn beschikbaar als sensorattributen voor je eigen EMS-logica, batterijsturing en dynamische energietarieven.
+> Deze integratie leest de openbare Frank Energie GraphQL API uit en levert de prijzen van vandaag en morgen, de huidige prijs en het goedkoopste en duurste prijsvenster van elke dag. De actuele kwartierprijs wordt op iedere echte kwartiergrens (`:00`/`:15`/`:30`/`:45`) opnieuw bepaald; de dagreeksen zelf worden lokaal gecachet en alleen opgehaald wanneer ze ontbreken. De volledige prijsreeksen zijn beschikbaar als sensorattributen voor je eigen EMS-logica, batterijsturing en dynamische energietarieven.
 
 ---
 
@@ -49,7 +49,7 @@ Een Home Assistant **custom component** die de **dynamische marktprijzen voor st
 ## Functies
 
 - ⚡ **Kwartierprijzen** — volledige marktprijsresolutie van 15 minuten (met automatische terugval naar 60-minutendata wanneer dat is wat Frank Energie publiceert).
-- 📅 **Vandaag & morgen** — beide dagen worden automatisch opgehaald; de prijzen voor morgen verschijnen zodra ze gepubliceerd zijn (doorgaans rond 15:00 CET).
+- 📅 **Vandaag & morgen** — beide dagen worden automatisch opgehaald en lokaal gecachet; de prijzen voor morgen verschijnen zodra ze gepubliceerd zijn (doorgaans tussen 13:00 en 14:00 lokale tijd).
 - 💶 **Sensor voor de huidige prijs** — het actieve prijsblok, met de volledige prijsopbouw als attributen.
 - 📉 Sensoren voor het **goedkoopste en duurste** prijsvenster (prijs + starttijd) voor de **volledige dag**, zowel vandaag als morgen.
 - 🗂️ **Volledige prijsreeksen** voor vandaag en morgen als sensorattributen — ideaal als databron voor een EMS.
@@ -92,6 +92,12 @@ Deze integratie is opgenomen in **HACS Default** en is direct doorzoekbaar in HA
 ## Configuratie
 
 De configuratie verloopt volledig via de gebruikersinterface (config flow).
+
+> **Let op:** installeer de integratie eerst via HACS en herstart Home Assistant. Pas daarna kun je haar toevoegen met de knop hieronder.
+
+[![Open je Home Assistant en voeg deze integratie toe.](https://my.home-assistant.io/badges/integration.svg)](https://my.home-assistant.io/redirect/integration/?domain=frank_quarter_prices)
+
+Of handmatig:
 
 1. Ga naar **Instellingen → Apparaten & Services → Integratie toevoegen**.
 2. Zoek naar **Frank Quarter Prices**.
@@ -329,14 +335,15 @@ Over de btw-optie:
 
 ## Verwerking van prijzen voor morgen
 
-Frank Energie publiceert de prijzen van de volgende dag in de loop van de middag (doorgaans rond **15:00 CET**). De integratie gaat hier soepel mee om:
+Frank Energie publiceert de prijzen van de volgende dag in de vroege middag, kort na de sluiting van de SDAC-veiling van 12:00 CET (in de praktijk **tussen 13:00 en 14:00 lokale tijd**). De integratie gaat hier soepel mee om:
 
-- De prijzen voor morgen worden bij **elke update** (elke 15 minuten) **altijd geprobeerd**.
+- De prijzen voor morgen worden **vanaf 12:00 lokale tijd** opgevraagd. Elke aanvraag daarvoor is een gegarandeerde misser, dus die wordt niet gedaan.
 - Als ze **nog niet beschikbaar** zijn, dan:
   - houdt de integratie `binary_sensor.frank_tomorrow_prices_available` **uit**,
   - laat ze de `*_tomorrow`-sensoren **onbeschikbaar**,
   - logt ze enkel een **info**-melding — er wordt nooit een `UpdateFailed` opgeworpen en de integratie wordt niet als mislukt gemarkeerd alleen omdat morgen ontbreekt.
-- Zodra ze gepubliceerd zijn (doorgaans na **15:00 lokale tijd**), gaat `binary_sensor.frank_tomorrow_prices_available` **aan** en vullen de sensoren voor morgen zich bij de volgende verversing van 15 minuten.
+- Zodra ze gepubliceerd zijn, gaat `binary_sensor.frank_tomorrow_prices_available` **aan** en vullen de sensoren voor morgen zich bij de volgende kwartierverversing.
+- Zodra een **volledige** dag is opgehaald, wordt die gecachet en niet opnieuw opgevraagd. Na middernacht wordt de gecachete "morgen" zonder extra aanvraag de nieuwe "vandaag".
 
 Gebruik de binaire sensor om automatiseringen die afhankelijk zijn van de prijzen van morgen pas te laten starten zodra die beschikbaar zijn.
 
@@ -475,7 +482,7 @@ card:
 
 ### Grafiek voor morgen
 
-Dezelfde stijl, maar leest `sensor.frank_prices_tomorrow`. De kaart blijft leeg totdat Frank Energie de prijzen voor morgen publiceert (≈15:00 CET).
+Dezelfde stijl, maar leest `sensor.frank_prices_tomorrow`. De kaart blijft leeg totdat Frank Energie de prijzen voor morgen publiceert (doorgaans tussen 13:00 en 14:00 lokale tijd).
 
 > **Opmerking over de span:** `apexcharts-card` heeft geen betrouwbare "tomorrow"-span-offset. De grafiek vertrouwt op de `data_generator`, die echte tijdstempels uit `attributes.prices` uitstuurt, zodat elke staaf op zijn correcte absolute tijd wordt geplot, ongeacht het ingestelde venster. `span.offset: +24h` is toegevoegd als hint; als jouw versie van de kaart dit negeert, worden de staven nog steeds op de juiste tijden weergegeven omdat elk punt zijn eigen `from`-datumtijd draagt.
 
@@ -669,7 +676,7 @@ Sinds **Home Assistant 2026.3** laden custom integraties hun eigen merkmateriaal
 ## Probleemoplossing
 
 - **Entiteiten tonen `unavailable`:**
-  - Voor de sensoren voor morgen / goedkoopste-morgen is dit verwacht voordat Frank Energie de volgende dag publiceert (rond 15:00 CET). Controleer `binary_sensor.frank_tomorrow_prices_available`.
+  - Voor de sensoren voor morgen / goedkoopste-morgen is dit verwacht voordat Frank Energie de volgende dag publiceert (doorgaans tussen 13:00 en 14:00 lokale tijd). Controleer `binary_sensor.frank_tomorrow_prices_available`.
   - Voor alle sensoren: controleer of de integratie geladen is onder **Instellingen → Apparaten & Services**.
 - **Entiteit-ID's komen niet overeen met de README:** zie de opmerking bij [Configuratie](#configuratie) — pas ze aan naar de ID's die getoond worden in **Ontwikkelaarshulpmiddelen → Statussen**.
 - **Helemaal geen data:** controleer of Home Assistant uitgaande internettoegang heeft tot `https://graphql.frankenergie.nl/`.
@@ -698,10 +705,10 @@ Nee. Het toont de componenten van de marktprijs (marktprijs, belasting, inkoopop
 Native kwartierprijzen (15 minuten, **96 blokken per dag**) — de integratie vraagt `resolution: PT15M` op via de openbare `marketPrices`-query. Heeft Frank Energie voor een bepaalde dag geen kwartierdata, dan wordt in plaats daarvan uurdata teruggegeven (60 minuten, 24 blokken). De blokken worden exact gebruikt zoals teruggegeven en worden nooit samengevoegd, zodat de goedkoopste/duurste tijden de exacte kwartierstart weergeven (bijv. `13:45`).
 
 **Hoe vaak wordt het bijgewerkt?**
-Elke 15 minuten via een `DataUpdateCoordinator`.
+Elk kwartier, gelijkgelopen met de echte kwartiergrenzen (`:00`/`:15`/`:30`/`:45`). De actieve kwartierprijs wordt daarbij lokaal herberekend uit de gecachete dagreeksen; er wordt alleen een aanvraag naar de API gedaan voor een dag die nog ontbreekt.
 
 **Waarom is morgen 's ochtends leeg?**
-Frank Energie publiceert de prijzen van de volgende dag doorgaans in de middag (~15:00 CET). De `*_tomorrow`-sensoren blijven tot dan onbeschikbaar en de integratie geeft in de tussentijd nooit een fout.
+Frank Energie publiceert de prijzen van de volgende dag in de vroege middag (doorgaans tussen 13:00 en 14:00 lokale tijd). De integratie vraagt ze vanaf 12:00 lokale tijd op. De `*_tomorrow`-sensoren blijven tot dan onbeschikbaar en de integratie geeft in de tussentijd nooit een fout.
 
 **Ondersteunt het België?**
 Ja — Nederland (NL) is de standaard; Belgische (BE) prijzen worden opgevraagd via de `x-country`-header.
