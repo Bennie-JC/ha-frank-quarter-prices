@@ -92,13 +92,9 @@ Deze integratie is opgenomen in **HACS Default** en is direct doorzoekbaar in HA
 
 ## Configuratie
 
-De configuratie verloopt volledig via de gebruikersinterface (config flow).
+Installeer **Frank Quarter Prices** eerst via HACS. Daarna kun je de integratie direct toevoegen met onderstaande knop:
 
-> **Let op:** installeer de integratie eerst via HACS en herstart Home Assistant. Pas daarna kun je de integratie toevoegen met de knop hieronder.
-
-[![Open your Home Assistant instance and show the integration setup.](https://my.home-assistant.io/badges/integration.svg)](https://my.home-assistant.io/redirect/integration/?domain=frank_quarter_prices)
-
-Na installatie kan **Frank Quarter Prices** worden toegevoegd via **Instellingen → Apparaten & diensten → Integratie toevoegen**.
+[![Add integration to My Home Assistant](https://my.home-assistant.io/badges/integration.svg)](https://my.home-assistant.io/redirect/integration/?domain=frank_quarter_prices)
 
 ---
 
