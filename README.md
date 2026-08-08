@@ -63,6 +63,15 @@ Een Home Assistant **custom component** die de **dynamische marktprijzen voor st
 
 ## Installatie
 
+[![Open HACS repository on My Home Assistant](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Bennie-JC&repository=ha-frank-quarter-prices&category=integration)
+
+Frank Quarter Prices is beschikbaar als **HACS Default** repository.
+
+1. Klik op de knop hierboven om de integratie in HACS te openen.
+2. Installeer **Frank Quarter Prices** via HACS.
+3. Herstart Home Assistant indien HACS daarom vraagt.
+4. Voeg daarna de integratie toe via **Instellingen → Apparaten & diensten → Integratie toevoegen → Frank Quarter Prices**.
+
 ### HACS-installatie (aanbevolen)
 
 Deze integratie is opgenomen in **HACS Default** en is direct doorzoekbaar in HACS — een aangepaste repository toevoegen is niet nodig.
