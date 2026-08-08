@@ -1,4 +1,6 @@
-# Frank Energie Kwartierprijzen voor Home Assistant (Custom Component)
+# Frank Energie Kwartierprijzen voor Home Assistant
+
+🇳🇱 Nederlands | [🇬🇧 English](README_EN.md)
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Default-41BDF5.svg)](https://github.com/hacs/default)
 [![GitHub release](https://img.shields.io/github/v/release/Bennie-JC/ha-frank-quarter-prices?display_name=tag&sort=semver&color=blue)](https://github.com/Bennie-JC/ha-frank-quarter-prices/releases/latest)
@@ -12,7 +14,11 @@
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2025.1%2B-blue.svg)](https://www.home-assistant.io/)
 [![Maintained](https://img.shields.io/maintenance/yes/2026.svg)](https://github.com/Bennie-JC/ha-frank-quarter-prices)
 
-Een Home Assistant **custom component** die de **dynamische marktprijzen voor stroom van Frank Energie** ontsluit — inclusief **kwartierprijzen (15 minuten)** resolutie — als een compacte set sensoren, ontworpen als een zuivere **prijsbron voor een energiemanagementsysteem (EMS)**.
+**Frank Energie Kwartierprijzen** is een Home Assistant **custom integratie** voor de **dynamische stroomprijzen van Frank Energie** op **15-minutenbasis** — de ruwe kwartierresolutie zoals Frank Energie die zelf publiceert, niet een uurgemiddelde.
+
+De integratie levert de volledige kwartierprijzen voor **vandaag** en, zodra gepubliceerd, **morgen**, samen met de actuele afnameprijs, de actuele terugleverprijs en het goedkoopste en duurste prijsvenster van de dag. De sensoren zijn direct bruikbaar in **dashboards**, **automatiseringen**, voor **thuisbatterijen** en in een eigen **Energy Management Systeem (EMS)** — geschikt voor wie stuurt op **dynamische energieprijzen**.
+
+De integratie is opgenomen in **HACS Default** en dus rechtstreeks doorzoekbaar en installeerbaar via HACS, zonder een aangepaste repository toe te voegen.
 
 > Deze integratie leest de openbare Frank Energie GraphQL API uit en levert de prijzen van vandaag en morgen, de huidige prijs en het goedkoopste en duurste prijsvenster van elke dag. De actuele kwartierprijs wordt op iedere echte kwartiergrens (`:00`/`:15`/`:30`/`:45`) opnieuw bepaald; de dagreeksen zelf worden lokaal gecachet en alleen opgehaald wanneer ze ontbreken. De volledige prijsreeksen zijn beschikbaar als sensorattributen voor je eigen EMS-logica, batterijsturing en dynamische energietarieven.
 
@@ -54,6 +60,7 @@ Een Home Assistant **custom component** die de **dynamische marktprijzen voor st
 - 💶 **Sensor voor de huidige prijs** — het actieve prijsblok, met de volledige prijsopbouw als attributen.
 - 📉 Sensoren voor het **goedkoopste en duurste** prijsvenster (prijs + starttijd) voor de **volledige dag**, zowel vandaag als morgen.
 - 🗂️ **Volledige prijsreeksen** voor vandaag en morgen als sensorattributen — ideaal als databron voor een EMS.
+- 📦 **HACS Default** — direct doorzoekbaar en installeerbaar binnen HACS, geen aangepaste repository nodig.
 - 🔁 **Robuuste updates** — als de data voor morgen nog niet beschikbaar is, breekt dit de integratie nooit; de sensoren blijven simpelweg onbeschikbaar tot publicatie.
 - 🌍 **NL als standaard met optionele BE-ondersteuning** via de `x-country`-header.
 - 🛠️ **Diagnostiek-ondersteuning** voor eenvoudige probleemoplossing (geheimen worden weggelaten).
@@ -71,6 +78,8 @@ Frank Quarter Prices is beschikbaar als **HACS Default** repository.
 2. Installeer **Frank Quarter Prices** via HACS.
 3. Herstart Home Assistant indien HACS daarom vraagt.
 4. Voeg daarna de integratie toe via **Instellingen → Apparaten & diensten → Integratie toevoegen → Frank Quarter Prices**.
+
+> De knop hierboven opent de repository direct in **HACS**, voor het **installeren of bijwerken** van de custom integratie. Om de integratie daarna te **configureren**, gebruik je de aparte "Integratie toevoegen"-knop bij [Configuratie](#configuratie).
 
 ### HACS-installatie (aanbevolen)
 
@@ -695,6 +704,12 @@ Sinds **Home Assistant 2026.3** laden custom integraties hun eigen merkmateriaal
 
 ## Veelgestelde vragen
 
+**Werkt Frank Energie met Home Assistant?**
+Ja, via deze onafhankelijke custom integratie. Ze ontsluit de openbare Frank Energie GraphQL-marktprijzen als Home Assistant-sensoren met kwartierresolutie.
+
+**Kan ik deze integratie via HACS installeren?**
+Ja. De integratie zit in **HACS Default**, dus ze is direct doorzoekbaar in **HACS → Integraties** — een aangepaste repository toevoegen is niet nodig. Zie [Installatie](#installatie).
+
 **Heb ik een Frank Energie-account of API-token nodig?**
 Nee. Marktprijzen zijn openbaar en vereisen geen authenticatie.
 
@@ -712,6 +727,12 @@ Frank Energie publiceert de prijzen van de volgende dag in de vroege middag (doo
 
 **Ondersteunt het België?**
 Ja — Nederland (NL) is de standaard; Belgische (BE) prijzen worden opgevraagd via de `x-country`-header.
+
+**Kan ik de kwartierprijzen gebruiken voor een thuisbatterij?**
+Ja. De sensoren voor het goedkoopste en duurste prijsvenster (met `timestamp` en `end_timestamp`) zijn bedoeld om laad- en ontlaadmomenten van een thuisbatterij op af te stemmen. Zie [EMS-integratievoorbeelden](#ems-integratievoorbeelden).
+
+**Kan ik Frank Quarter Prices gebruiken in een EMS?**
+Ja. De sensoren `sensor.frank_prices_today` en `sensor.frank_prices_tomorrow` stellen de volledige kwartierreeks (met resolutie, gemiddelde, min- en maxprijs) beschikbaar als attribuut, zodat een extern of zelfgebouwd Energy Management Systeem daar rechtstreeks tegen kan plannen.
 
 **Is dit een officiële Frank Energie-integratie?**
 Nee, dit is een onafhankelijk communityproject. Zie de [disclaimer](#disclaimer).
