@@ -2,6 +2,7 @@
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Default-41BDF5.svg)](https://github.com/hacs/default)
 [![GitHub release](https://img.shields.io/github/v/release/Bennie-JC/ha-frank-quarter-prices?display_name=tag&sort=semver&color=blue)](https://github.com/Bennie-JC/ha-frank-quarter-prices/releases/latest)
+![Installaties](https://img.shields.io/badge/dynamic/json?label=Installaties&query=%24.frank_quarter_prices.total&url=https%3A%2F%2Fanalytics.home-assistant.io%2Fcustom_integrations.json)
 [![HACS validation](https://github.com/Bennie-JC/ha-frank-quarter-prices/actions/workflows/hacs.yml/badge.svg)](https://github.com/Bennie-JC/ha-frank-quarter-prices/actions/workflows/hacs.yml)
 [![Hassfest](https://github.com/Bennie-JC/ha-frank-quarter-prices/actions/workflows/hassfest.yml/badge.svg)](https://github.com/Bennie-JC/ha-frank-quarter-prices/actions/workflows/hassfest.yml)
 [![GitHub stars](https://img.shields.io/github/stars/Bennie-JC/ha-frank-quarter-prices?style=flat&color=yellow)](https://github.com/Bennie-JC/ha-frank-quarter-prices/stargazers)
@@ -93,17 +94,11 @@ Deze integratie is opgenomen in **HACS Default** en is direct doorzoekbaar in HA
 
 De configuratie verloopt volledig via de gebruikersinterface (config flow).
 
-> **Let op:** installeer de integratie eerst via HACS en herstart Home Assistant. Pas daarna kun je haar toevoegen met de knop hieronder.
+> **Let op:** installeer de integratie eerst via HACS en herstart Home Assistant. Pas daarna kun je de integratie toevoegen met de knop hieronder.
 
-[![Open je Home Assistant en voeg deze integratie toe.](https://my.home-assistant.io/badges/integration.svg)](https://my.home-assistant.io/redirect/integration/?domain=frank_quarter_prices)
+[![Open your Home Assistant instance and show the integration setup.](https://my.home-assistant.io/badges/integration.svg)](https://my.home-assistant.io/redirect/integration/?domain=frank_quarter_prices)
 
-Of handmatig:
-
-1. Ga naar **Instellingen → Apparaten & Services → Integratie toevoegen**.
-2. Zoek naar **Frank Quarter Prices**.
-3. Volg de stappen en bevestig.
-
-Alle entiteiten worden gegroepeerd onder één **Frank**-apparaat, zodat entiteit-ID's de korte vorm `sensor.frank_<naam>` aannemen (bijvoorbeeld `sensor.frank_current_price`). De voorbeelden in deze README gebruiken die ID's direct — je kunt ze controleren via **Ontwikkelaarshulpmiddelen → Statussen** op je eigen systeem.
+Na installatie kan **Frank Quarter Prices** worden toegevoegd via **Instellingen → Apparaten & diensten → Integratie toevoegen**.
 
 ---
 
