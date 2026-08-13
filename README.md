@@ -4,7 +4,10 @@
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Default-41BDF5.svg)](https://github.com/hacs/default)
 [![GitHub release](https://img.shields.io/github/v/release/Bennie-JC/ha-frank-quarter-prices?display_name=tag&sort=semver&color=blue)](https://github.com/Bennie-JC/ha-frank-quarter-prices/releases/latest)
-![Installaties](https://img.shields.io/badge/dynamic/json?label=Installaties&query=%24.frank_quarter_prices.total&url=https%3A%2F%2Fanalytics.home-assistant.io%2Fcustom_integrations.json)
+<!-- Installatiebadge: tijdelijk uitgeschakeld. frank_quarter_prices staat nog niet in
+     analytics.home-assistant.io/custom_integrations.json, waardoor de badge "no result"
+     toont. Zet de regel hieronder terug zodra de integratie daar wél in staat. -->
+<!-- ![Installaties](https://img.shields.io/badge/dynamic/json?label=Installaties&query=%24.frank_quarter_prices.total&url=https%3A%2F%2Fanalytics.home-assistant.io%2Fcustom_integrations.json) -->
 [![HACS validation](https://github.com/Bennie-JC/ha-frank-quarter-prices/actions/workflows/hacs.yml/badge.svg)](https://github.com/Bennie-JC/ha-frank-quarter-prices/actions/workflows/hacs.yml)
 [![Hassfest](https://github.com/Bennie-JC/ha-frank-quarter-prices/actions/workflows/hassfest.yml/badge.svg)](https://github.com/Bennie-JC/ha-frank-quarter-prices/actions/workflows/hassfest.yml)
 [![GitHub stars](https://img.shields.io/github/stars/Bennie-JC/ha-frank-quarter-prices?style=flat&color=yellow)](https://github.com/Bennie-JC/ha-frank-quarter-prices/stargazers)
@@ -16,7 +19,7 @@
 
 **Frank Energie Kwartierprijzen** is een Home Assistant **custom integratie** voor de **dynamische stroomprijzen van Frank Energie** op **15-minutenbasis** — de ruwe kwartierresolutie zoals Frank Energie die zelf publiceert, niet een uurgemiddelde.
 
-De integratie levert de volledige kwartierprijzen voor **vandaag** en, zodra gepubliceerd, **morgen**, samen met de actuele afnameprijs, de actuele terugleverprijs en het goedkoopste en duurste prijsvenster van de dag. De sensoren zijn direct bruikbaar in **dashboards**, **automatiseringen**, voor **thuisbatterijen** en in een eigen **Energy Management Systeem (EMS)** — geschikt voor wie stuurt op **dynamische energieprijzen**.
+De integratie levert de volledige kwartierprijzen voor **vandaag** en, zodra gepubliceerd, **morgen**, samen met de actuele afnameprijs, de actuele terugleverprijs, het goedkoopste en duurste prijsvenster van de dag en de instelbare **goedkope en dure prijszone** van vandaag. De sensoren zijn direct bruikbaar in **dashboards**, **automatiseringen**, voor **thuisbatterijen** en in een eigen **Energy Management Systeem (EMS)** — geschikt voor wie stuurt op **dynamische energieprijzen**.
 
 De integratie is opgenomen in **HACS Default** en dus rechtstreeks doorzoekbaar en installeerbaar via HACS, zonder een aangepaste repository toe te voegen.
 
@@ -31,20 +34,21 @@ De integratie is opgenomen in **HACS Default** en dus rechtstreeks doorzoekbaar 
   - [HACS-installatie (aanbevolen)](#hacs-installatie-aanbevolen)
   - [Handmatige installatie](#handmatige-installatie)
 - [Configuratie](#configuratie)
+  - [Instellingen](#instellingen)
 - [Aangemaakte sensoren](#aangemaakte-sensoren)
   - [Sensoroverzicht](#sensoroverzicht)
   - [Sensoren goedkoopste / duurste prijsvenster](#sensoren-goedkoopste--duurste-prijsvenster)
+  - [Prijszones (goedkoop / duur)](#prijszones-goedkoop--duur)
   - [Attributen van prijsblokken](#attributen-van-prijsblokken)
 - [Home Assistant Energy Dashboard](#home-assistant-energy-dashboard)
   - [Netafname (verbruik)](#netafname-verbruik)
   - [Teruglevering aan het net](#teruglevering-aan-het-net)
-  - [Rekenvoorbeeld terugleverprijs](#rekenvoorbeeld-terugleverprijs)
+- [Prijszone-dashboard](#prijszone-dashboard)
 - [Verwerking van prijzen voor morgen](#verwerking-van-prijzen-voor-morgen)
 - [GraphQL API-bron](#graphql-api-bron)
 - [ApexCharts-dashboard](#apexcharts-dashboard)
 - [EMS-integratievoorbeelden](#ems-integratievoorbeelden)
 - [Voorbeeld Home Assistant-templates](#voorbeeld-home-assistant-templates)
-- [Merkmateriaal (integratie-icoon)](#merkmateriaal-integratie-icoon)
 - [Probleemoplossing](#probleemoplossing)
 - [Veelgestelde vragen](#veelgestelde-vragen)
 - [Bijdragen](#bijdragen)
@@ -56,9 +60,10 @@ De integratie is opgenomen in **HACS Default** en dus rechtstreeks doorzoekbaar 
 ## Functies
 
 - ⚡ **Kwartierprijzen** — volledige marktprijsresolutie van 15 minuten (met automatische terugval naar 60-minutendata wanneer dat is wat Frank Energie publiceert).
-- 📅 **Vandaag & morgen** — beide dagen worden automatisch opgehaald en lokaal gecachet; de prijzen voor morgen verschijnen zodra ze gepubliceerd zijn (doorgaans tussen 13:00 en 14:00 lokale tijd).
+- 📅 **Vandaag & morgen** — beide dagen worden automatisch opgehaald en lokaal gecachet; de prijzen voor morgen verschijnen zodra ze gepubliceerd zijn (doorgaans tussen 13:00 en 14:00 markttijd).
 - 💶 **Sensor voor de huidige prijs** — het actieve prijsblok, met de volledige prijsopbouw als attributen.
 - 📉 Sensoren voor het **goedkoopste en duurste** prijsvenster (prijs + starttijd) voor de **volledige dag**, zowel vandaag als morgen.
+- 🏷️ **Prijszones** — de langste aaneengesloten goedkope en dure periode van vandaag, met start- en eindsensoren (echte tijdstempels) en binaire sensoren die aangeven of je nu ín die periode zit. De marges zijn instelbaar (standaard 15%).
 - 🗂️ **Volledige prijsreeksen** voor vandaag en morgen als sensorattributen — ideaal als databron voor een EMS.
 - 📦 **HACS Default** — direct doorzoekbaar en installeerbaar binnen HACS, geen aangepaste repository nodig.
 - 🔁 **Robuuste updates** — als de data voor morgen nog niet beschikbaar is, breekt dit de integratie nooit; de sensoren blijven simpelweg onbeschikbaar tot publicatie.
@@ -114,11 +119,46 @@ Installeer **Frank Quarter Prices** eerst via HACS. Daarna kun je de integratie 
 
 [![Add integration to My Home Assistant](https://my.home-assistant.io/badges/integration.svg)](https://my.home-assistant.io/redirect/integration/?domain=frank_quarter_prices)
 
+Of handmatig:
+
+1. Ga naar **Instellingen → Apparaten & diensten → Integratie toevoegen**.
+2. Zoek naar **Frank Quarter Prices**.
+3. Volg de stappen en bevestig.
+
+Bij het toevoegen kies je alleen het **land** (NL of BE). Er is geen account, token of wachtwoord nodig.
+
+Alle entiteiten vallen onder één apparaat met de naam **Frank**. De integratie gebruikt entity-ID's in de vorm `sensor.frank_<naam>`, bijvoorbeeld `sensor.frank_current_price`. De voorbeelden in deze README gebruiken die ID's rechtstreeks — controleer ze op je eigen systeem via **Ontwikkelaarshulpmiddelen → Statussen**.
+
+### Instellingen
+
+Alle overige instellingen wijzig je achteraf via:
+
+```text
+Instellingen → Apparaten & diensten → Frank Quarter Prices → Configureren
+```
+
+| Instelling | Standaard | Bereik | Betekenis |
+| --- | --- | --- | --- |
+| **Teruglevercorrectie** | `0.0 EUR/kWh` | −1.0 … 1.0, stap 0.001 | Bedrag dat bij de marktprijs wordt opgeteld om je terugleverprijs te schatten. Positief = extra vergoeding, negatief = inhouding. |
+| **21% btw toepassen op terugleverprijs** | uit | aan/uit | Rekent de terugleverprijs inclusief 21% btw, toegepast op de marktprijs plús de teruglevercorrectie. |
+| **Marge goedkope prijszone** | `15%` | 0 … 49%, stap 1% | Welk deel van het dagelijkse prijsverschil, gerekend vanaf het goedkoopste kwartier, nog als goedkoop telt. |
+| **Marge dure prijszone** | `15%` | 0 … 49%, stap 1% | Welk deel van het dagelijkse prijsverschil, gerekend vanaf het duurste kwartier, nog als duur telt. |
+
+Beide zonemarges staan **standaard op 15%** en zijn vrij instelbaar tussen 0 en 49%; 15% is dus geen vaste regel maar alleen de startwaarde.
+
+De marge is een percentage van het **prijsverschil van de dag zelf** — het verschil tussen het duurste en het goedkoopste kwartier — en niet van de prijs in euro's. Bij de standaardmarge van 15% telt een kwartier mee voor de goedkope zone zolang het niet meer dan 15% van dat dagelijkse prijsverschil boven de laagste prijs ligt. De **langste aaneengesloten reeks** van die kwartieren vormt de zone. Voor de dure zone geldt hetzelfde spiegelbeeldig, gerekend vanaf de duurste kwartierprijs.
+
+Het maximum is 49% en niet 50%, zodat de goedkope en de dure zone elkaar nooit kunnen overlappen: samen blijven ze altijd onder de 100% van het dagbereik, dus geen enkel kwartier kan tegelijk goedkoop én duur zijn.
+
+Wijzig je een marge, dan volgen de zonesensoren, de binaire sensoren en het dashboard automatisch. Home Assistant herlaadt daarbij de integratie — net zoals bij elke andere optiewijziging — waarna de prijzen van vandaag (en na 12:00 markttijd ook die van morgen) één keer opnieuw worden opgehaald. De zoneberekening zelf is puur lokaal rekenwerk en doet geen eigen aanvraag.
+
+> Bestaande installaties hoeven niets te doen. Een configuratie zonder deze instellingen gebruikt automatisch de standaardwaarden; opnieuw toevoegen is niet nodig.
+
 ---
 
 ## Aangemaakte sensoren
 
-De integratie maakt exact **13 entiteiten** aan, afgestemd op gebruik binnen een EMS.
+De integratie maakt exact **19 entiteiten** aan, afgestemd op gebruik binnen een EMS.
 
 Voor elke dag vraagt de integratie **alle** prijsblokken voor stroom op bij Frank Energie (lokaal 00:00 → 24:00) en bepaalt het enige goedkoopste en het enige duurste blok van die **volledige dag**, op de ruwe resolutie die Frank teruggeeft (15 minuten of per uur). Er wordt geen filtering op de komende 24/48 uur, geen filtering op alleen de huidige tijd, geen filtering op alleen de toekomst en geen uurgemiddelde toegepast.
 
@@ -136,8 +176,14 @@ Voor elke dag vraagt de integratie **alle** prijsblokken voor stroom op bij Fran
 | `sensor.frank_cheapest_time_tomorrow` | Starttijd van het goedkoopste blok morgen | `HH:MM` | — |
 | `sensor.frank_most_expensive_tomorrow` | Duurste blokprijs van de volledige dag morgen | `total_price_eur_kwh` | EUR/kWh |
 | `sensor.frank_most_expensive_time_tomorrow` | Starttijd van het duurste blok morgen | `HH:MM` | — |
+| `sensor.frank_cheap_zone_start_today` | Start van de goedkope prijszone vandaag | tijdstempel | — |
+| `sensor.frank_cheap_zone_end_today` | Einde van de goedkope prijszone vandaag | tijdstempel | — |
+| `sensor.frank_expensive_zone_start_today` | Start van de dure prijszone vandaag | tijdstempel | — |
+| `sensor.frank_expensive_zone_end_today` | Einde van de dure prijszone vandaag | tijdstempel | — |
 | `sensor.frank_prices_today` | Aantal prijsblokken vandaag (volledige reeks in attributen) | aantal | blokken |
 | `sensor.frank_prices_tomorrow` | Aantal prijsblokken morgen (volledige reeks in attributen) | aantal | blokken |
+| `binary_sensor.frank_cheap_period` | Of het nú goedkope stroom is (binnen de goedkope prijszone) | aan/uit | — |
+| `binary_sensor.frank_expensive_period` | Of het nú dure stroom is (binnen de dure prijszone) | aan/uit | — |
 | `binary_sensor.frank_tomorrow_prices_available` | Of de prijzen voor morgen gepubliceerd zijn | aan/uit | — |
 
 ### Sensoren goedkoopste / duurste prijsvenster
@@ -179,6 +225,66 @@ sensor.frank_cheapest_time_today = "19:45"
 
 De `*_tomorrow`-sensoren blijven **onbeschikbaar** totdat Frank Energie de prijzen voor morgen publiceert.
 
+### Prijszones (goedkoop / duur)
+
+Waar de sensoren hierboven het énkele goedkoopste en duurste kwartier aanwijzen, geven de prijszones de **hele periode** waarin stroom goedkoop respectievelijk duur is. Dat is wat je nodig hebt om een boiler, wasmachine of thuisbatterij een blok achter elkaar te laten draaien.
+
+**Hoe de zone wordt bepaald:**
+
+1. De integratie bepaalt eerst het **prijsverschil van de volledige dag**: de duurste kwartierprijs min de goedkoopste.
+2. De ingestelde marge — standaard **15%** — is een percentage van dát verschil, gerekend vanaf de betreffende uiterste prijs:
+
+   ```text
+   dagverschil      = hoogste prijs − laagste prijs
+   goedkope drempel = laagste prijs + dagverschil × marge%
+   dure drempel     = hoogste prijs − dagverschil × marge%
+   ```
+
+   Bijvoorbeeld: laagste prijs `0.10`, hoogste prijs `0.30`, dus een dagverschil van `0.20`. Bij 15% ligt de goedkope drempel op `0.10 + 0.20 × 0,15 = 0.13` en de dure drempel op `0.30 − 0.20 × 0,15 = 0.27`.
+
+3. Elk kwartier dat aan die drempel voldoet, is een kandidaat.
+4. De zone is de **langste aaneengesloten reeks** kandidaten. Losse goedkope kwartieren elders op de dag worden dus niet meegetrokken: als 03:00–03:15 goedkoop is en 12:30–15:15 aaneengesloten goedkoop is, dan is de zone `12:30–15:15` en niet `03:00–15:15`.
+5. Zijn twee reeksen precies even lang, dan wint de **vroegste**.
+
+Omdat de marge het dagbereik als maatstaf gebruikt en maximaal 49% is, liggen de twee drempels altijd uit elkaar. Een kwartier kan dus nooit tegelijk als goedkoop én als duur worden aangemerkt, en de twee zones kunnen elkaar niet overlappen.
+
+De berekening gebruikt de echte begin- en eindtijdstempels van de prijsblokken, dus de dagen met zomer-/wintertijdovergang (92 of 100 kwartieren) werken net zo goed als een gewone dag van 96 kwartieren.
+
+**Een prijszone wordt alleen gepubliceerd voor een volledige dag.** Een zone doet een uitspraak over de héle dag ("het goedkoopste aaneengesloten blok van vandaag"); dat kun je niet beantwoorden met alleen de ochtend. Zolang de prijsreeks van vandaag onvolledig is — bijvoorbeeld vlak na een herstart, of wanneer Frank de dag in delen publiceert — blijven alle zes de zone-entiteiten **onbeschikbaar** in plaats van een misleidende zone uit een halve dag te tonen. Zodra de dag compleet is, verschijnen ze vanzelf. Is een volledige dag eenmaal bekend, dan blijven de zones ook tijdens een storing van de Frank API gewoon werken vanuit die gecachete dag.
+
+Volledigheid wordt gemeten aan de werkelijke **marktdagrand** (van middernacht tot middernacht in de tijdzone van de markt: `Europe/Amsterdam` voor NL en `Europe/Brussels` voor BE), niet aan een vast aantal blokken — daarom kloppen ook de 92- en 100-kwartierdagen rond de zomertijdovergang. De tijdzone die je in Home Assistant hebt ingesteld doet daar niet aan mee: draait je Home Assistant op UTC of in een andere tijdzone, dan blijft de Frank-marktdag exact hetzelfde.
+
+**Is de prijs de hele dag exact gelijk**, dan is er geen goedkoop-versus-duur onderscheid te maken. In dat zeldzame geval blijven alle zes de zone-entiteiten onbeschikbaar in plaats van de hele dag zowel goedkoop als duur te noemen.
+
+**Start- en eindsensoren:**
+
+- **Status:** een volledige, tijdzonebewuste **tijdstempel** (`device_class: timestamp`) — direct bruikbaar in een automatiseringstrigger, zonder tekst te hoeven parsen.
+- **Attributen:** `time` (de vertrouwde `"HH:MM"`-weergave), `zone_start`, `zone_end`, `margin_percent`, `threshold_eur_kwh`, `day_min_price`, `day_max_price`, `zone_duration_minutes`, `quarter_count`.
+
+**Binaire sensoren** `binary_sensor.frank_cheap_period` en `binary_sensor.frank_expensive_period`:
+
+- **Aan** zolang het huidige moment binnen de zone valt, volgens `start <= nu < eind` — de zone eindigt dus precies op zijn eindgrens. De vergelijking gebeurt op absolute tijdstippen, dus je Home Assistant-tijdzone doet er niet aan mee.
+- **Onbeschikbaar** wanneer er voor vandaag geen zone bepaald kan worden. Ze tonen nooit een verouderde zone van gisteren.
+- **Attributen:** `zone_start`, `zone_end`, `threshold_eur_kwh`, `margin_percent`.
+
+Voorbeeld:
+
+```text
+sensor.frank_cheap_zone_start_today = 2026-08-06T12:30:00+02:00
+  attributes:
+    time: "12:30"
+    zone_start: "2026-08-06T12:30:00+02:00"
+    zone_end: "2026-08-06T15:15:00+02:00"
+    margin_percent: 15.0
+    threshold_eur_kwh: 0.148
+    zone_duration_minutes: 165
+    quarter_count: 11
+
+binary_sensor.frank_cheap_period = on
+```
+
+De zones worden **lokaal** afgeleid uit de prijsreeks die al is opgehaald. Ze kosten geen enkele extra API-aanvraag en gebruiken dezelfde kwartiergrens-verversing als de rest van de integratie.
+
 ### Attributen van prijsblokken
 
 Het attribuut `full_block` (en elk item in de `prices`-reeksen) heeft de volgende vorm:
@@ -195,7 +301,7 @@ total_price_eur_kwh: 0.21682
 per_unit: "kWh"
 ```
 
-De sensoren `sensor.frank_prices_today` en `sensor.frank_prices_tomorrow` stellen de **volledige reeks** prijsblokken voor de hele dag beschikbaar in hun `prices`-attribuut, samen met `resolution_minutes`, `cheapest_block`, `most_expensive_block`, `average_price`, `min_price` en `max_price`. Daarmee zijn ze de handige enkele bron waartegen een EMS kan plannen.
+De sensoren `sensor.frank_prices_today` en `sensor.frank_prices_tomorrow` stellen de **volledige reeks** prijsblokken voor de hele dag beschikbaar in hun `prices`-attribuut, samen met `resolution_minutes`, `cheapest_block`, `most_expensive_block`, `average_price`, `min_price` en `max_price`. Daarmee zijn ze de handige enkele bron waartegen een EMS kan plannen. `sensor.frank_prices_tomorrow` voegt daar `available` en `last_attempt` aan toe.
 
 ---
 
@@ -255,103 +361,154 @@ sensor.frank_current_return_price
 
 Deze sensor wordt gebruikt voor de **vergoeding van stroom die je aan het net teruglevert** en bevat de geschatte actuele **terugleverprijs** als numerieke waarde in **EUR/kWh**.
 
-Belangrijk om te weten:
-
-- Deze sensor is een **schatting**, tenzij de Frank API een expliciet terugleverprijsveld aanbiedt. Op de openbare API is dat op dit moment **niet** het geval, dus de waarde wordt berekend uit het geverifieerde marktprijsveld plus je ingestelde teruglevercorrectie.
-- Contractvoorwaarden kunnen verschillen — controleer de waarde altijd aan de hand van je eigen Frank Energie-contract.
-- De teruglevercorrectie mag **positief** (extra vergoeding), **negatief** (inhouding of terugleverkosten) of **nul** zijn.
-- De sensor past **geen** energiebelasting en **geen** saldering (net metering) toe.
-- De berekening staat los van het aflopen van de Nederlandse salderingsregeling op 1 januari 2027.
-
-De teruglevercorrectie en de btw-optie wijzig je via:
-
-```text
-Instellingen → Apparaten & Services → Frank Quarter Prices → Configureren
-```
-
-Het optievenster bevat twee instellingen:
-
-```text
-Teruglevercorrectie
-21% btw toepassen op terugleverprijs
-```
-
-De standaard teruglevercorrectie is `0.0 EUR/kWh` en de btw-optie staat standaard **uit**, zodat bestaande installaties zonder herconfiguratie exact dezelfde waarde blijven tonen.
-
-De sensor stelt daarnaast een paar stabiele attributen beschikbaar:
-
-```yaml
-market_price_source: market_price      # het gebruikte, geverifieerde prijsveld
-market_price: 0.08000                  # de ruwe marktprijs van het actieve blok
-feed_in_adjustment: 0.0                # de ingestelde teruglevercorrectie
-calculation_method: market_price_plus_adjustment
-```
-
-### Rekenvoorbeeld terugleverprijs
-
-De terugleverprijs wordt berekend op basis van de btw-optie.
-
-**Checkbox uit (standaard):**
+**Hoe de waarde tot stand komt:**
 
 ```text
 terugleverprijs = marktprijs + teruglevercorrectie
 ```
 
-**Checkbox aan:**
+en met **21% btw toepassen op terugleverprijs** ingeschakeld:
 
 ```text
 terugleverprijs = (marktprijs + teruglevercorrectie) × 1,21
 ```
 
-De btw wordt dus toegepast op de volledige vergoeding: de marktprijs plus de ingestelde teruglevercorrectie.
+De btw wordt dus toegepast op de volledige vergoeding: de marktprijs plus de ingestelde correctie. Beide instellingen staan bij [Configuratie → Instellingen](#instellingen); standaard is de correctie `0.0` en staat de btw-optie uit, zodat bestaande installaties zonder herconfiguratie exact dezelfde waarde blijven tonen.
 
-Voorbeeld met een positieve correctie (btw uit):
+De sensor stelt een paar stabiele attributen beschikbaar:
 
-```text
-Geverifieerde marktprijs: 0.080 EUR/kWh
-Ingestelde correctie:     0.018 EUR/kWh
-Geschatte terugleverprijs: 0.098 EUR/kWh
+```yaml
+market_price_source: market_price      # het gebruikte, geverifieerde prijsveld
+market_price: 0.08000                  # de ruwe marktprijs van het actieve blok
+feed_in_adjustment: 0.0                # de ingestelde teruglevercorrectie
+apply_vat: false                       # of de btw-optie aanstaat
+vat_rate: 0.21                         # het gehanteerde btw-tarief
+calculation_method: market_price_plus_adjustment
 ```
 
-Voorbeeld met een negatieve correctie:
+`calculation_method` wordt `market_price_plus_adjustment_including_vat` zodra de btw-optie aanstaat.
 
-```text
-Geverifieerde marktprijs: 0.080 EUR/kWh
-Ingestelde correctie:    -0.017 EUR/kWh
-Geschatte terugleverprijs: 0.063 EUR/kWh
+Belangrijk om te weten:
+
+- Deze sensor is een **schatting**. De openbare Frank API biedt géén expliciet terugleverprijsveld, dus de waarde wordt berekend uit de ruwe marktprijs plus je ingestelde correctie. Controleer hem aan de hand van je eigen Frank Energie-contract; de juiste correctie hangt van dat contract af.
+- De correctie mag **positief** (extra vergoeding), **negatief** (inhouding of terugleverkosten) of **nul** zijn. Een negatieve terugleverprijs is mogelijk en wordt niet afgekapt naar nul.
+- De sensor past **geen** energiebelasting, **geen** inkoopopslag en **geen** saldering (net metering) toe, en is niet gekoppeld aan het kalenderjaar of aan het aflopen van de salderingsregeling op 1 januari 2027.
+
+> **Over het gebruikte prijsveld:** de openbare `marketPrices`-query levert `marketPrice`, `marketPriceTax`, `sourcingMarkupPrice` en `energyTaxPrice`. Verificatie tegen de live API wees uit dat `marketPriceTax` exact 21% btw over `marketPrice` is en dat `sourcingMarkupPrice` (de inkoopvergoeding) een vast bedrag is dat optelt in de all-in **afname**prijs. Er bestaat geen expliciet terugleverveld. Daarom gebruikt de integratie bewust alleen de ruwe `marketPrice` — zonder btw, energiebelasting of inkoopopslag — als basis voor de terugleverprijs.
+
+---
+
+## Prijszone-dashboard
+
+Een kant-en-klare kaart die de goedkope en dure prijszone van vandaag toont. De integratie rekent, het dashboard toont alleen — er wordt geen enkele prijsberekening meer in Jinja gedaan.
+
+![Frank prijszones — de goedkope en dure periode van vandaag, met drempelprijs en ingestelde marge](images/frank-price-zones-dashboard.png)
+
+De weergegeven percentages en drempels komen rechtstreeks uit de attributen van de zonesensoren. **Standaard staat de marge op 15%**, maar dat is alleen de standaardwaarde: je past hem per zone aan via **Instellingen → Apparaten & diensten → Frank Quarter Prices → Configureren**. Zet je de goedkope marge op 20% en de dure op 10%, dan toont de kaart dat automatisch — er staat niets hard-gecodeerd in de YAML.
+
+> **`card-mod` is optioneel** en wordt uitsluitend voor de opmaak gebruikt — de kleuren, de afronding en de lettergroottes. Zonder `card-mod` werkt de kaart gewoon en blijven de tijden groot (ze zijn markdown-koppen); laat de `card_mod`-blokken dan simpelweg weg. De integratie rekent hoe dan ook zelf; het dashboard toont alleen.
+
+Voeg een nieuwe **Handmatige** dashboardkaart toe en plak:
+
+```yaml
+type: vertical-stack
+cards:
+  - type: heading
+    heading: Frank Energie
+    heading_style: title
+    icon: mdi:information-outline
+
+  - type: markdown
+    content: |-
+      {% set low_start = states('sensor.frank_cheapest_time_today') %}
+      {% set low_end = state_attr('sensor.frank_cheapest_today', 'end_timestamp') %}
+      {% set high_start = states('sensor.frank_most_expensive_time_today') %}
+      {% set high_end = state_attr('sensor.frank_most_expensive_today', 'end_timestamp') %}
+      {% set unusable = ['unknown', 'unavailable', 'none', ''] %}
+      {% if low_start not in unusable and low_end and high_start not in unusable and high_end %}
+      Vandaag is de prijs per kWh het laagst tussen **{{ low_start }}** en **{{ (low_end | as_datetime | as_local).strftime('%H:%M') }}**, en het hoogst tussen **{{ high_start }}** en **{{ (high_end | as_datetime | as_local).strftime('%H:%M') }}**.
+      {% else %}
+      De prijzen van vandaag zijn nog niet beschikbaar.
+      {% endif %}
+
+  - type: markdown
+    content: |-
+      {% set sensor = 'sensor.frank_cheap_zone_start_today' %}
+      {% set start = state_attr(sensor, 'time') %}
+      {% set end = state_attr('sensor.frank_cheap_zone_end_today', 'time') %}
+      {% set threshold = state_attr(sensor, 'threshold_eur_kwh') %}
+      {% set margin = state_attr(sensor, 'margin_percent') %}
+      ### 🏷️ Goedkope prijszone vandaag
+      {% if start and end and threshold is not none %}
+      # {{ start }} – {{ end }}
+      ## ≤ € {{ '%.3f' | format(threshold | float(0)) }}/kWh
+
+      Binnen {{ margin | float(0) | round(0) | int }}% van de dagelijkse prijsrange boven het goedkoopste kwartier van de dag.
+      {% else %}
+      Nog niet beschikbaar.
+      {% endif %}
+    card_mod:
+      style:
+        ha-markdown $: |
+          h3 { font-size: 21px; font-weight: 600; margin: 0; }
+          h1 { font-size: 38px; font-weight: 700; line-height: 1.15; margin: 6px 0 0 0; }
+          h2 { font-size: 20px; font-weight: 500; margin: 2px 0 0 0; opacity: 0.9; }
+          p  { font-size: 14px; margin: 6px 0 0 0; opacity: 0.7; }
+        .: |
+          ha-card {
+            border-radius: 18px;
+            padding: 12px 18px;
+            background: rgba(50, 180, 90, 0.10);
+            border: 1px solid rgba(50, 180, 90, 0.28);
+          }
+
+  - type: markdown
+    content: |-
+      {% set sensor = 'sensor.frank_expensive_zone_start_today' %}
+      {% set start = state_attr(sensor, 'time') %}
+      {% set end = state_attr('sensor.frank_expensive_zone_end_today', 'time') %}
+      {% set threshold = state_attr(sensor, 'threshold_eur_kwh') %}
+      {% set margin = state_attr(sensor, 'margin_percent') %}
+      ### 📈 Dure prijszone vandaag
+      {% if start and end and threshold is not none %}
+      # {{ start }} – {{ end }}
+      ## ≥ € {{ '%.3f' | format(threshold | float(0)) }}/kWh
+
+      Binnen {{ margin | float(0) | round(0) | int }}% van de dagelijkse prijsrange onder het duurste kwartier van de dag.
+      {% else %}
+      Nog niet beschikbaar.
+      {% endif %}
+    card_mod:
+      style:
+        ha-markdown $: |
+          h3 { font-size: 21px; font-weight: 600; margin: 0; }
+          h1 { font-size: 38px; font-weight: 700; line-height: 1.15; margin: 6px 0 0 0; }
+          h2 { font-size: 20px; font-weight: 500; margin: 2px 0 0 0; opacity: 0.9; }
+          p  { font-size: 14px; margin: 6px 0 0 0; opacity: 0.7; }
+        .: |
+          ha-card {
+            border-radius: 18px;
+            padding: 12px 18px;
+            background: rgba(220, 60, 60, 0.09);
+            border: 1px solid rgba(220, 60, 60, 0.25);
+          }
 ```
 
-De juiste correctie hangt af van je eigen contract. Beide voorbeelden zijn slechts illustratief en vertegenwoordigen **niet** het actuele Frank Energie-contract. Een negatieve terugleverprijs is mogelijk en wordt niet afgekapt naar nul.
-
-Voorbeeld met **21% btw toepassen op terugleverprijs** ingeschakeld:
-
-```text
-Geverifieerde marktprijs: 0.00323 EUR/kWh
-Ingestelde correctie:     0.01820 EUR/kWh
-Geschatte terugleverprijs: (0.00323 + 0.01820) × 1,21 = 0.0259303 EUR/kWh
-```
-
-Over de btw-optie:
-
-- De optie staat **standaard uitgeschakeld**; laat je hem uit, dan blijft de berekening exact zoals hierboven zonder btw.
-- **Controleer zelf** in je eigen Frank Energie-contract of afrekening of jouw terugleververgoeding inclusief of exclusief btw wordt berekend — jij blijft verantwoordelijk voor de keuze die bij jouw situatie past.
-- Het in- of uitschakelen is **niet** gekoppeld aan het kalenderjaar. De integratie zet de btw **niet** automatisch aan in 2026 of uit in 2027.
-- Btw-behandeling en de salderingsregeling zijn **losstaande** zaken. Het aflopen van de saldering bepaalt niet automatisch of er btw van toepassing is.
-
-> **Over het gebruikte prijsveld:** de openbare `marketPrices`-query levert `marketPrice`, `marketPriceTax`, `sourcingMarkupPrice` en `energyTaxPrice`. Verificatie tegen de live API wees uit dat `marketPriceTax` exact 21% btw over `marketPrice` is (een kostenpost aan de *afname*kant) en dat er geen expliciet terugleverveld bestaat. Daarom gebruikt de integratie bewust alleen de ruwe `marketPrice` (zonder btw, energiebelasting of inkoopopslag) als basis voor de terugleverprijs.
+Zolang de zonesensoren onbeschikbaar zijn, tonen de kaarten "Nog niet beschikbaar" in plaats van een sjabloonfout.
 
 ---
 
 ## Verwerking van prijzen voor morgen
 
-Frank Energie publiceert de prijzen van de volgende dag in de vroege middag, kort na de sluiting van de SDAC-veiling van 12:00 CET (in de praktijk **tussen 13:00 en 14:00 lokale tijd**). De integratie gaat hier soepel mee om:
+Frank Energie publiceert de prijzen van de volgende dag in de vroege middag, kort na de sluiting van de SDAC-veiling van 12:00 CET (in de praktijk **tussen 13:00 en 14:00 markttijd**). Alle tijden hieronder zijn **markttijd** — `Europe/Amsterdam` voor NL en `Europe/Brussels` voor BE — en dus onafhankelijk van de tijdzone die in Home Assistant is ingesteld. De integratie gaat hier soepel mee om:
 
-- De prijzen voor morgen worden **vanaf 12:00 lokale tijd** opgevraagd. Elke aanvraag daarvoor is een gegarandeerde misser, dus die wordt niet gedaan.
+- De prijzen voor morgen worden **vanaf 12:00 markttijd** opgevraagd. Elke aanvraag daarvoor is een gegarandeerde misser, dus die wordt niet gedaan.
 - Als ze **nog niet beschikbaar** zijn, dan:
   - houdt de integratie `binary_sensor.frank_tomorrow_prices_available` **uit**,
   - laat ze de `*_tomorrow`-sensoren **onbeschikbaar**,
   - logt ze enkel een **info**-melding — er wordt nooit een `UpdateFailed` opgeworpen en de integratie wordt niet als mislukt gemarkeerd alleen omdat morgen ontbreekt.
 - Zodra ze gepubliceerd zijn, gaat `binary_sensor.frank_tomorrow_prices_available` **aan** en vullen de sensoren voor morgen zich bij de volgende kwartierverversing.
+- Blijven de aanvragen mislukken met een echte fout (geen storing bij jou, maar bijvoorbeeld een API-storing), dan wordt vanaf de tweede opeenvolgende fout maximaal elke **30 minuten** opnieuw geprobeerd in plaats van elk kwartier. Eén losse mislukte aanvraag wordt gewoon bij de volgende kwartiertik herhaald.
 - Zodra een **volledige** dag is opgehaald, wordt die gecachet en niet opnieuw opgevraagd. Na middernacht wordt de gecachete "morgen" zonder extra aanvraag de nieuwe "vandaag".
 
 Gebruik de binaire sensor om automatiseringen die afhankelijk zijn van de prijzen van morgen pas te laten starten zodra die beschikbaar zijn.
@@ -385,17 +542,17 @@ query MarketPrices($date: String!, $resolution: PriceResolution!) {
 }
 ```
 
-De integratie vraagt `resolution: PT15M` op, wat **native kwartierprijzen (96 blokken per dag)** teruggeeft — zonder authenticatie. De blokken worden exact gebruikt zoals ze worden teruggegeven en worden nooit samengevoegd.
+De integratie vraagt `resolution: PT15M` op, wat **native kwartierprijzen** teruggeeft — zonder authenticatie. Dat zijn normaal **96 blokken per marktdag**, en **92 of 100** op de dagen van de zomer-/wintertijdovergang. De blokken worden exact gebruikt zoals ze worden teruggegeven en worden nooit samengevoegd.
 
-> **Belangrijk:** het argument `resolution: PriceResolution!` ontsluit de kwartierdata. Zonder dit argument (of met `PT60M`) geeft dezelfde `marketPrices`-query slechts **24 uurblokken** terug, en dat is de reden waarom het goedkoopste blok eerder bijvoorbeeld naar `14:00` sprong in plaats van `13:45`. De query `marketPricesElectricity(startDate, endDate)` geeft eveneens alleen uurdata terug en wordt niet gebruikt.
+> **Belangrijk:** het argument `resolution: PriceResolution!` ontsluit de kwartierdata. Zonder dit argument (of met `PT60M`) geeft dezelfde `marketPrices`-query slechts uurblokken terug — normaal **24 per marktdag**, en 23 of 25 op de overgangsdagen — en dat is de reden waarom het goedkoopste blok eerder bijvoorbeeld naar `14:00` sprong in plaats van `13:45`. De query `marketPricesElectricity(startDate, endDate)` geeft eveneens alleen uurdata terug en wordt niet gebruikt.
 
-Verzoeken gebruiken een time-out van 30 seconden en worden tot 3 keer opnieuw geprobeerd. Ongeldige records worden gevalideerd en overgeslagen. België (BE) wordt ondersteund door de header `x-country: BE` mee te sturen; Nederland (NL) is de standaard.
+Verzoeken gebruiken een time-out van 30 seconden en worden maximaal 3 keer uitgevoerd (dus twee herkansingen). Ongeldige records worden gevalideerd en overgeslagen. België (BE) wordt ondersteund door de header `x-country: BE` mee te sturen; Nederland (NL) is de standaard.
 
 ---
 
 ## ApexCharts-dashboard
 
-Je kunt de prijzen visualiseren als een kleurgecodeerde staafdiagram — **één staaf per prijsblok**. Wanneer Frank Energie native kwartierdata teruggeeft, krijg je **96 staven per dag**; als alleen uurdata beschikbaar is, krijg je **24 staven**. De data wordt nooit samengevoegd.
+Je kunt de prijzen visualiseren als een kleurgecodeerde staafdiagram — **één staaf per prijsblok**. Wanneer Frank Energie native kwartierdata teruggeeft, krijg je normaal **96 staven per dag** (92 of 100 op de dagen van de zomer-/wintertijdovergang); als alleen uurdata beschikbaar is, krijg je er normaal **24** (23 of 25 op die dagen). De data wordt nooit samengevoegd.
 
 ![Frank stroomprijs vandaag — kwartierstaven gekleurd groen/oranje/rood op basis van prijs](images/apexcharts_today.png)
 
@@ -491,7 +648,7 @@ card:
 
 ### Grafiek voor morgen
 
-Dezelfde stijl, maar leest `sensor.frank_prices_tomorrow`. De kaart blijft leeg totdat Frank Energie de prijzen voor morgen publiceert (doorgaans tussen 13:00 en 14:00 lokale tijd).
+Dezelfde stijl, maar leest `sensor.frank_prices_tomorrow`. De kaart blijft leeg totdat Frank Energie de prijzen voor morgen publiceert (doorgaans tussen 13:00 en 14:00 markttijd).
 
 > **Opmerking over de span:** `apexcharts-card` heeft geen betrouwbare "tomorrow"-span-offset. De grafiek vertrouwt op de `data_generator`, die echte tijdstempels uit `attributes.prices` uitstuurt, zodat elke staaf op zijn correcte absolute tijd wordt geplot, ongeacht het ingestelde venster. `span.offset: +24h` is toegevoegd als hint; als jouw versie van de kaart dit negeert, worden de staven nog steeds op de juiste tijden weergegeven omdat elk punt zijn eigen `from`-datumtijd draagt.
 
@@ -599,6 +756,52 @@ automation:
           entity_id: switch.dishwasher
 ```
 
+**Laad de thuisbatterij gedurende de hele goedkope prijszone:**
+
+```yaml
+automation:
+  - alias: "Charge battery during the cheap price zone"
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.frank_cheap_period
+        to: "on"
+    action:
+      - service: switch.turn_on
+        target:
+          entity_id: switch.battery_charge
+```
+
+**Ontlaad de thuisbatterij zodra de dure prijszone begint:**
+
+```yaml
+automation:
+  - alias: "Discharge battery during the expensive price zone"
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.frank_expensive_period
+        to: "on"
+    action:
+      - service: switch.turn_on
+        target:
+          entity_id: switch.battery_discharge
+```
+
+**Plan vooruit op het exacte tijdstip waarop de goedkope zone begint:**
+
+```yaml
+automation:
+  - alias: "Notify 15 minutes before the cheap price zone"
+    trigger:
+      - platform: time
+        at:
+          entity_id: sensor.frank_cheap_zone_start_today
+          offset: "-00:15:00"
+    action:
+      - service: notify.persistent_notification
+        data:
+          message: "De goedkope prijszone begint over 15 minuten."
+```
+
 **Reageer alleen wanneer de prijs laag genoeg is (drempelwaarde):**
 
 ```yaml
@@ -661,33 +864,15 @@ automation:
 
 ---
 
-## Merkmateriaal (integratie-icoon)
-
-Deze integratie wordt geleverd met neutraal, zelfgemaakt icoon- en logomateriaal (een bliksemschicht voor een kwartierklok, in een wolkblauwe stijl). De **kant-en-klare PNG-bestanden** staan onder [custom_components/frank_quarter_prices/brand/](custom_components/frank_quarter_prices/brand/):
-
-- `icon.png` — 256×256
-- `icon@2x.png` — 512×512
-- `logo.png` — 256×256
-- `logo@2x.png` — 512×512
-
-De bewerkbare bronbestanden (SVG) staan onder [custom_components/frank_quarter_prices/icons/](custom_components/frank_quarter_prices/icons/) (`icon.svg`, `logo.svg`). Al dit materiaal gebruikt bewust **niet** het officiële Frank Energie-logo of enig handelsmerk.
-
-### Het icoon verschijnt overal (Home Assistant 2026.3+)
-
-Sinds **Home Assistant 2026.3** laden custom integraties hun eigen merkmateriaal rechtstreeks uit een lokale `brand/`-map binnen de integratie — er is **geen** PR naar de [home-assistant/brands](https://github.com/home-assistant/brands) repository meer nodig. Lokale merkafbeeldingen krijgen zelfs **voorrang** op de centrale Brands-repository. Deze integratie bevat die map al ([custom_components/frank_quarter_prices/brand/](custom_components/frank_quarter_prices/brand/)), dus het icoon verschijnt automatisch overal — zowel op de integratiekaart als in de **integratielijst**.
-
-> **Zie je nog *"icon not available"*?** Herstart Home Assistant (of herlaad de integratie) en leeg eventueel de browsercache. De afbeeldingen worden geserveerd via `/api/brands/integration/frank_quarter_prices/icon.png`. Op Home Assistant-versies ouder dan 2026.3 toont de lijst een generieke tijdelijke afbeelding totdat je upgradet; dit is puur cosmetisch en heeft geen invloed op de werking.
-
-> **Bijdragen aan Home Assistant Core?** Alleen als deze integratie ooit in HA core wordt opgenomen, moeten de lokale `brand/`-bestanden worden verwijderd en in plaats daarvan via een PR aan de [home-assistant/brands](https://github.com/home-assistant/brands) repository worden toegevoegd (map `custom_integrations/frank_quarter_prices/`).
-
----
-
 ## Probleemoplossing
 
 - **Entiteiten tonen `unavailable`:**
-  - Voor de sensoren voor morgen / goedkoopste-morgen is dit verwacht voordat Frank Energie de volgende dag publiceert (doorgaans tussen 13:00 en 14:00 lokale tijd). Controleer `binary_sensor.frank_tomorrow_prices_available`.
-  - Voor alle sensoren: controleer of de integratie geladen is onder **Instellingen → Apparaten & Services**.
-- **Entiteit-ID's komen niet overeen met de README:** zie de opmerking bij [Configuratie](#configuratie) — pas ze aan naar de ID's die getoond worden in **Ontwikkelaarshulpmiddelen → Statussen**.
+  - Voor de sensoren voor morgen / goedkoopste-morgen is dit verwacht voordat Frank Energie de volgende dag publiceert (doorgaans tussen 13:00 en 14:00 markttijd). Controleer `binary_sensor.frank_tomorrow_prices_available`.
+  - Voor alle sensoren: controleer of de integratie geladen is onder **Instellingen → Apparaten & diensten**.
+- **Entiteit-ID's komen niet overeen met de README:** kijk welke ID's je installatie werkelijk gebruikt via **Ontwikkelaarshulpmiddelen → Statussen** en pas je automatiseringen daarop aan.
+- **Zone-entiteiten tonen `unavailable`:** er is voor vandaag nog geen *volledige* prijsreeks bekend. Een zone beschrijft de hele dag, dus die wordt bewust niet uit een halve dag afgeleid. Controleer `sensor.frank_prices_today`: staat daar minder dan een volledige dag (normaal 96 blokken, 92 of 100 rond de zomertijdovergang), dan vullen de zones zich zodra de dag compleet is.
+- **Zone-entiteiten blijven `unavailable` terwijl de dag compleet is:** dat gebeurt alleen wanneer alle kwartieren van de dag exact dezelfde prijs hebben; er is dan geen goedkoop-versus-duur onderscheid.
+- **Prijszones lijken niet te kloppen:** de zone is de *langste aaneengesloten* reeks kwartieren binnen de ingestelde marge, niet elk goedkoop kwartier van de dag. Controleer de attributen `threshold_eur_kwh` en `margin_percent` op de zonesensor om te zien welke drempel is gebruikt.
 - **Helemaal geen data:** controleer of Home Assistant uitgaande internettoegang heeft tot `https://graphql.frankenergie.nl/`.
 - **Schakel debug-logging in** door dit toe te voegen aan `configuration.yaml` en te herstarten:
 
@@ -717,19 +902,25 @@ Nee. Marktprijzen zijn openbaar en vereisen geen authenticatie.
 Nee. Het toont de componenten van de marktprijs (marktprijs, belasting, inkoopopslag, energiebelasting). Je werkelijke tarief kan afwijken afhankelijk van je contract.
 
 **Welke resolutie hebben de prijzen?**
-Native kwartierprijzen (15 minuten, **96 blokken per dag**) — de integratie vraagt `resolution: PT15M` op via de openbare `marketPrices`-query. Heeft Frank Energie voor een bepaalde dag geen kwartierdata, dan wordt in plaats daarvan uurdata teruggegeven (60 minuten, 24 blokken). De blokken worden exact gebruikt zoals teruggegeven en worden nooit samengevoegd, zodat de goedkoopste/duurste tijden de exacte kwartierstart weergeven (bijv. `13:45`).
+Native kwartierprijzen (15 minuten): normaal **96 blokken per marktdag**, en 92 of 100 op de dagen van de zomer-/wintertijdovergang. De integratie vraagt `resolution: PT15M` op via de openbare `marketPrices`-query. Heeft Frank Energie voor een bepaalde dag geen kwartierdata, dan wordt in plaats daarvan uurdata teruggegeven (60 minuten; normaal 24 blokken, 23 of 25 op die overgangsdagen). De blokken worden exact gebruikt zoals teruggegeven en worden nooit samengevoegd, zodat de goedkoopste/duurste tijden de exacte kwartierstart weergeven (bijv. `13:45`).
 
 **Hoe vaak wordt het bijgewerkt?**
 Elk kwartier, gelijkgelopen met de echte kwartiergrenzen (`:00`/`:15`/`:30`/`:45`). De actieve kwartierprijs wordt daarbij lokaal herberekend uit de gecachete dagreeksen; er wordt alleen een aanvraag naar de API gedaan voor een dag die nog ontbreekt.
 
 **Waarom is morgen 's ochtends leeg?**
-Frank Energie publiceert de prijzen van de volgende dag in de vroege middag (doorgaans tussen 13:00 en 14:00 lokale tijd). De integratie vraagt ze vanaf 12:00 lokale tijd op. De `*_tomorrow`-sensoren blijven tot dan onbeschikbaar en de integratie geeft in de tussentijd nooit een fout.
+Frank Energie publiceert de prijzen van de volgende dag in de vroege middag (doorgaans tussen 13:00 en 14:00 markttijd). De integratie vraagt ze vanaf 12:00 markttijd op. De `*_tomorrow`-sensoren blijven tot dan onbeschikbaar en de integratie geeft in de tussentijd nooit een fout.
 
 **Ondersteunt het België?**
 Ja — Nederland (NL) is de standaard; Belgische (BE) prijzen worden opgevraagd via de `x-country`-header.
 
 **Kan ik de kwartierprijzen gebruiken voor een thuisbatterij?**
-Ja. De sensoren voor het goedkoopste en duurste prijsvenster (met `timestamp` en `end_timestamp`) zijn bedoeld om laad- en ontlaadmomenten van een thuisbatterij op af te stemmen. Zie [EMS-integratievoorbeelden](#ems-integratievoorbeelden).
+Ja. De sensoren voor het goedkoopste en duurste prijsvenster (met `timestamp` en `end_timestamp`) en de prijszones (met `binary_sensor.frank_cheap_period` / `binary_sensor.frank_expensive_period`) zijn bedoeld om laad- en ontlaadmomenten van een thuisbatterij op af te stemmen. Zie [EMS-integratievoorbeelden](#ems-integratievoorbeelden).
+
+**Wat is het verschil tussen "goedkoopste" en de "goedkope prijszone"?**
+`sensor.frank_cheapest_today` wijst het énkele goedkoopste kwartier van de dag aan. De goedkope prijszone is de langste *aaneengesloten periode* van kwartieren die binnen de ingestelde marge (standaard 15% van het dagelijkse prijsverschil) boven dat goedkoopste kwartier vallen — dus meestal een blok van een of meerdere uren. Zie [Prijszones](#prijszones-goedkoop--duur).
+
+**Kosten de prijszones extra API-aanvragen?**
+Nee. Ze worden lokaal afgeleid uit de prijsreeks die de integratie toch al heeft opgehaald en gecachet, één keer per kwartierverversing.
 
 **Kan ik Frank Quarter Prices gebruiken in een EMS?**
 Ja. De sensoren `sensor.frank_prices_today` en `sensor.frank_prices_tomorrow` stellen de volledige kwartierreeks (met resolutie, gemiddelde, min- en maxprijs) beschikbaar als attribuut, zodat een extern of zelfgebouwd Energy Management Systeem daar rechtstreeks tegen kan plannen.

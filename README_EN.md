@@ -15,7 +15,7 @@
 
 **Frank Energie Quarter-Hour Prices** is an unofficial Home Assistant **custom integration** for **Frank Energie's dynamic electricity prices** on a **15-minute basis** — the raw quarter-hour resolution as published by Frank Energie itself, not an hourly average.
 
-The integration provides the full quarter-hour prices for **today** and, once published, **tomorrow**, together with the current purchase price, the current feed-in price, and the cheapest and most expensive price window of the day. The sensors are ready to use in **dashboards**, **automations**, for **home batteries**, and in your own **Energy Management System (EMS)** — well suited for anyone acting on **dynamic electricity prices**.
+The integration provides the full quarter-hour prices for **today** and, once published, **tomorrow**, together with the current purchase price, the current feed-in price, the cheapest and most expensive price window of the day, and today's configurable **cheap and expensive price zone**. The sensors are ready to use in **dashboards**, **automations**, for **home batteries**, and in your own **Energy Management System (EMS)** — well suited for anyone acting on **dynamic electricity prices**.
 
 The integration is included in **HACS Default**, so it's directly searchable and installable through HACS without adding a custom repository.
 
@@ -30,20 +30,21 @@ The integration is included in **HACS Default**, so it's directly searchable and
   - [HACS installation (recommended)](#hacs-installation-recommended)
   - [Manual installation](#manual-installation)
 - [Configuration](#configuration)
+  - [Settings](#settings)
 - [Sensors created](#sensors-created)
   - [Sensor overview](#sensor-overview)
   - [Cheapest / most expensive price window sensors](#cheapest--most-expensive-price-window-sensors)
+  - [Price zones (cheap / expensive)](#price-zones-cheap--expensive)
   - [Price block attributes](#price-block-attributes)
 - [Home Assistant Energy Dashboard](#home-assistant-energy-dashboard)
   - [Grid consumption](#grid-consumption)
   - [Grid feed-in](#grid-feed-in)
-  - [Feed-in price calculation example](#feed-in-price-calculation-example)
+- [Price zone dashboard](#price-zone-dashboard)
 - [Handling tomorrow's prices](#handling-tomorrows-prices)
 - [GraphQL API source](#graphql-api-source)
 - [ApexCharts dashboard](#apexcharts-dashboard)
 - [EMS integration examples](#ems-integration-examples)
 - [Example Home Assistant templates](#example-home-assistant-templates)
-- [Brand assets (integration icon)](#brand-assets-integration-icon)
 - [Troubleshooting](#troubleshooting)
 - [Frequently asked questions](#frequently-asked-questions)
 - [Contributing](#contributing)
@@ -55,9 +56,10 @@ The integration is included in **HACS Default**, so it's directly searchable and
 ## Features
 
 - ⚡ **Quarter-hour prices** — full 15-minute market price resolution (with automatic fallback to 60-minute data when that's what Frank Energie publishes).
-- 📅 **Today & tomorrow** — both days are fetched automatically and cached locally; tomorrow's prices appear as soon as they're published (typically between 1 PM and 2 PM local time).
+- 📅 **Today & tomorrow** — both days are fetched automatically and cached locally; tomorrow's prices appear as soon as they're published (typically between 13:00 and 14:00 market-local time).
 - 💶 **Current price sensor** — the currently active price block, with the full price breakdown as attributes.
 - 📉 Sensors for the **cheapest and most expensive** price window (price + start time) for the **entire day**, for both today and tomorrow.
+- 🏷️ **Price zones** — today's longest contiguous cheap and expensive period, with start/end sensors (real timestamps) and binary sensors telling you whether you are inside that period right now. Both margins are configurable (15% by default).
 - 🗂️ **Full price series** for today and tomorrow as sensor attributes — ideal as a data source for an EMS.
 - 📦 **HACS Default** — directly searchable and installable within HACS, no custom repository needed.
 - 🔁 **Robust updates** — if tomorrow's data isn't available yet, the integration never breaks; the sensors simply stay unavailable until publication.
@@ -114,13 +116,40 @@ Or manually:
 2. Search for **Frank Quarter Prices**.
 3. Follow the steps and confirm.
 
-All entities are grouped under a single **Frank** device, so entity IDs take the short form `sensor.frank_<name>` (for example `sensor.frank_current_price`). The examples in this README use those IDs directly — you can verify them via **Developer Tools → States** on your own system.
+All entities are grouped under a single **Frank** device. The integration uses entity IDs of the form `sensor.frank_<name>`, for example `sensor.frank_current_price`. The examples in this README use those IDs directly — you can verify them via **Developer Tools → States** on your own system.
+
+Adding the integration only asks for the **country** (NL or BE). No account, token or password is required.
+
+### Settings
+
+Every other setting is changed afterwards via:
+
+```text
+Settings → Devices & Services → Frank Quarter Prices → Configure
+```
+
+| Setting | Default | Range | Meaning |
+| --- | --- | --- | --- |
+| **Feed-in adjustment** | `0.0 EUR/kWh` | −1.0 … 1.0, step 0.001 | Amount added to the market price to estimate your feed-in price. Positive = extra compensation, negative = a deduction. |
+| **Apply 21% VAT to feed-in price** | off | on/off | Calculates the feed-in price including 21% VAT, applied to the market price *plus* the feed-in adjustment. |
+| **Cheap price-zone margin** | `15%` | 0 … 49%, step 1% | How much of the day's price range, measured up from the cheapest quarter, still counts as cheap. |
+| **Expensive price-zone margin** | `15%` | 0 … 49%, step 1% | How much of the day's price range, measured down from the most expensive quarter, still counts as expensive. |
+
+Both zone margins **default to 15%** and are freely configurable between 0 and 49% — 15% is not a fixed rule, only the starting value.
+
+The margin is a percentage of the **day's own price range** — its most expensive quarter minus its cheapest — and not of the price in euros. At the default 15%, a quarter counts towards the cheap zone as long as it sits no more than 15% of that daily range above the lowest price. The **longest contiguous run** of those quarters forms the zone. The expensive zone mirrors this, measured from the day's most expensive quarter price.
+
+The maximum is 49% rather than 50% so the cheap and expensive zones can never overlap: together they always stay below 100% of the daily range, so no quarter can be both cheap and expensive.
+
+Change a margin and the zone sensors, the binary sensors and the dashboard follow automatically. Home Assistant reloads the integration to apply it — as it does for any option change — after which today's prices (and tomorrow's, past 12:00 market-local time) are fetched once more. The zone calculation itself is pure local arithmetic and issues no request of its own.
+
+> Existing installations need to do nothing. A configuration without these settings automatically uses the defaults; re-adding the integration is not necessary.
 
 ---
 
 ## Sensors created
 
-The integration creates exactly **13 entities**, tailored for use within an EMS.
+The integration creates exactly **19 entities**, tailored for use within an EMS.
 
 For each day, the integration requests **all** electricity price blocks from Frank Energie (local 00:00 → 24:00) and determines the single cheapest and single most expensive block of that **entire day**, at the raw resolution Frank returns (15 minutes or hourly). There is no filtering to the next 24/48 hours, no filtering to only the current time, no filtering to only the future, and no hourly averaging applied.
 
@@ -138,8 +167,14 @@ For each day, the integration requests **all** electricity price blocks from Fra
 | `sensor.frank_cheapest_time_tomorrow` | Start time of the cheapest block tomorrow | `HH:MM` | — |
 | `sensor.frank_most_expensive_tomorrow` | Most expensive block price of the entire day tomorrow | `total_price_eur_kwh` | EUR/kWh |
 | `sensor.frank_most_expensive_time_tomorrow` | Start time of the most expensive block tomorrow | `HH:MM` | — |
+| `sensor.frank_cheap_zone_start_today` | Start of today's cheap price zone | timestamp | — |
+| `sensor.frank_cheap_zone_end_today` | End of today's cheap price zone | timestamp | — |
+| `sensor.frank_expensive_zone_start_today` | Start of today's expensive price zone | timestamp | — |
+| `sensor.frank_expensive_zone_end_today` | End of today's expensive price zone | timestamp | — |
 | `sensor.frank_prices_today` | Number of price blocks today (full series in attributes) | count | blocks |
 | `sensor.frank_prices_tomorrow` | Number of price blocks tomorrow (full series in attributes) | count | blocks |
+| `binary_sensor.frank_cheap_period` | Whether electricity is cheap right now (inside the cheap price zone) | on/off | — |
+| `binary_sensor.frank_expensive_period` | Whether electricity is expensive right now (inside the expensive price zone) | on/off | — |
 | `binary_sensor.frank_tomorrow_prices_available` | Whether tomorrow's prices have been published | on/off | — |
 
 ### Cheapest / most expensive price window sensors
@@ -181,6 +216,66 @@ sensor.frank_cheapest_time_today = "19:45"
 
 The `*_tomorrow` sensors stay **unavailable** until Frank Energie publishes tomorrow's prices.
 
+### Price zones (cheap / expensive)
+
+Where the sensors above point at the *single* cheapest and most expensive quarter, the price zones give you the **whole period** in which electricity is cheap respectively expensive. That is what you need to run a boiler, washing machine or home battery for a stretch at a time.
+
+**How a zone is determined:**
+
+1. The integration first works out the **price range of the entire day**: its most expensive quarter price minus its cheapest.
+2. The configured margin — **15%** by default — is a percentage of *that range*, measured from the respective extreme:
+
+   ```text
+   daily range        = highest price − lowest price
+   cheap threshold    = lowest price  + daily range × margin%
+   expensive threshold= highest price − daily range × margin%
+   ```
+
+   For example: lowest price `0.10`, highest price `0.30`, so a daily range of `0.20`. At 15% the cheap threshold is `0.10 + 0.20 × 0.15 = 0.13` and the expensive threshold is `0.30 − 0.20 × 0.15 = 0.27`.
+
+3. Every quarter meeting that threshold is a candidate.
+4. The zone is the **longest contiguous run** of candidates. Isolated cheap quarters elsewhere in the day are therefore not pulled in: if 03:00–03:15 is cheap and 12:30–15:15 is contiguously cheap, the zone is `12:30–15:15` and not `03:00–15:15`.
+5. If two runs are exactly the same length, the **earliest** one wins.
+
+Because the margin is measured against the daily range and is capped at 49%, the two thresholds always stay apart. A quarter can therefore never be marked as both cheap and expensive, and the two zones cannot overlap.
+
+The calculation uses the price blocks' real start and end timestamps, so the daylight-saving transition days (92 or 100 quarters) work exactly like an ordinary 96-quarter day.
+
+**A price zone is only published for a complete day.** A zone makes a claim about the whole day ("today's cheapest contiguous block"), and that cannot be answered from the morning alone. While today's price series is incomplete — shortly after a restart, say, or when Frank publishes the day in parts — all six zone entities stay **unavailable** rather than showing a misleading zone derived from half a day. They appear by themselves once the day is complete. Once a complete day is known, the zones keep working from that cached day even while the Frank API is down.
+
+Completeness is measured against the real **market-day** span (midnight to midnight in the market's own timezone: `Europe/Amsterdam` for NL, `Europe/Brussels` for BE), not against a fixed block count — which is why the 92- and 100-quarter daylight-saving days validate correctly too. The timezone configured in Home Assistant plays no part: run Home Assistant in UTC or anywhere else and the Frank market day stays exactly the same.
+
+**If every quarter of the day has exactly the same price**, there is no cheap-versus-expensive distinction to draw. In that rare case all six zone entities stay unavailable rather than calling the whole day both cheap and expensive.
+
+**Start and end sensors:**
+
+- **State:** a full, timezone-aware **timestamp** (`device_class: timestamp`) — directly usable in an automation trigger, with no string parsing.
+- **Attributes:** `time` (the familiar `"HH:MM"` rendering), `zone_start`, `zone_end`, `margin_percent`, `threshold_eur_kwh`, `day_min_price`, `day_max_price`, `zone_duration_minutes`, `quarter_count`.
+
+**Binary sensors** `binary_sensor.frank_cheap_period` and `binary_sensor.frank_expensive_period`:
+
+- **On** while the current moment falls inside the zone, following `start <= now < end` — so the zone ends precisely at its end boundary. The comparison is between absolute instants, so your Home Assistant timezone plays no part.
+- **Unavailable** when no zone can be determined for today. They never show a stale zone from yesterday.
+- **Attributes:** `zone_start`, `zone_end`, `threshold_eur_kwh`, `margin_percent`.
+
+Example:
+
+```text
+sensor.frank_cheap_zone_start_today = 2026-08-06T12:30:00+02:00
+  attributes:
+    time: "12:30"
+    zone_start: "2026-08-06T12:30:00+02:00"
+    zone_end: "2026-08-06T15:15:00+02:00"
+    margin_percent: 15.0
+    threshold_eur_kwh: 0.148
+    zone_duration_minutes: 165
+    quarter_count: 11
+
+binary_sensor.frank_cheap_period = on
+```
+
+The zones are derived **locally** from the price series that has already been fetched. They cost not a single extra API request and use the same quarter-boundary refresh as the rest of the integration.
+
 ### Price block attributes
 
 The `full_block` attribute (and each item in the `prices` series) has the following shape:
@@ -197,7 +292,7 @@ total_price_eur_kwh: 0.21682
 per_unit: "kWh"
 ```
 
-The `sensor.frank_prices_today` and `sensor.frank_prices_tomorrow` sensors expose the **full series** of price blocks for the entire day in their `prices` attribute, together with `resolution_minutes`, `cheapest_block`, `most_expensive_block`, `average_price`, `min_price`, and `max_price`. That makes them the convenient single source an EMS can plan against.
+The `sensor.frank_prices_today` and `sensor.frank_prices_tomorrow` sensors expose the **full series** of price blocks for the entire day in their `prices` attribute, together with `resolution_minutes`, `cheapest_block`, `most_expensive_block`, `average_price`, `min_price`, and `max_price`. That makes them the convenient single source an EMS can plan against. `sensor.frank_prices_tomorrow` adds `available` and `last_attempt` on top of those.
 
 ---
 
@@ -257,103 +352,154 @@ sensor.frank_current_return_price
 
 This sensor is used for the **compensation for electricity you feed back into the grid** and holds the estimated current **feed-in price** as a numeric value in **EUR/kWh**.
 
-Important to know:
-
-- This sensor is an **estimate**, unless the Frank API offers an explicit feed-in-price field. On the public API that is currently **not** the case, so the value is calculated from the verified market-price field plus your configured feed-in adjustment.
-- Contract terms can differ — always verify the value against your own Frank Energie contract.
-- The feed-in adjustment can be **positive** (extra compensation), **negative** (a deduction or feed-in cost), or **zero**.
-- The sensor applies **no** energy tax and **no** net metering.
-- The calculation is independent of the phase-out of the Dutch net-metering scheme on January 1, 2027.
-
-You change the feed-in adjustment and the VAT option via:
-
-```text
-Settings → Devices & Services → Frank Quarter Prices → Configure
-```
-
-The options dialog has two settings:
-
-```text
-Feed-in adjustment
-Apply 21% VAT to feed-in price
-```
-
-The default feed-in adjustment is `0.0 EUR/kWh` and the VAT option is **off** by default, so existing installations keep showing the exact same value without reconfiguration.
-
-The sensor also exposes a few stable attributes:
-
-```yaml
-market_price_source: market_price      # the verified price field used
-market_price: 0.08000                  # the raw market price of the active block
-feed_in_adjustment: 0.0                # the configured feed-in adjustment
-calculation_method: market_price_plus_adjustment
-```
-
-### Feed-in price calculation example
-
-The feed-in price is calculated based on the VAT option.
-
-**Checkbox off (default):**
+**How the value is derived:**
 
 ```text
 feed_in_price = market_price + feed_in_adjustment
 ```
 
-**Checkbox on:**
+and with **Apply 21% VAT to feed-in price** enabled:
 
 ```text
-feed_in_price = (market_price + feed_in_adjustment) × 1.21
+feed_in_price = (market_price + feed_in_adjustment) x 1.21
 ```
 
-So VAT is applied to the full compensation: the market price plus the configured feed-in adjustment.
+So VAT is applied to the full compensation: the market price plus the configured adjustment. Both settings live under [Configuration -> Settings](#settings); by default the adjustment is `0.0` and the VAT option is off, so existing installations keep showing the exact same value without reconfiguration.
 
-Example with a positive adjustment (VAT off):
+The sensor exposes a few stable attributes:
 
-```text
-Verified market price: 0.080 EUR/kWh
-Configured adjustment: 0.018 EUR/kWh
-Estimated feed-in price: 0.098 EUR/kWh
+```yaml
+market_price_source: market_price      # the verified price field used
+market_price: 0.08000                  # the raw market price of the active block
+feed_in_adjustment: 0.0                # the configured feed-in adjustment
+apply_vat: false                       # whether the VAT option is enabled
+vat_rate: 0.21                         # the VAT rate applied
+calculation_method: market_price_plus_adjustment
 ```
 
-Example with a negative adjustment:
+`calculation_method` becomes `market_price_plus_adjustment_including_vat` as soon as the VAT option is enabled.
 
-```text
-Verified market price: 0.080 EUR/kWh
-Configured adjustment:  -0.017 EUR/kWh
-Estimated feed-in price: 0.063 EUR/kWh
+Important to know:
+
+- This sensor is an **estimate**. The public Frank API offers no explicit feed-in-price field, so the value is calculated from the raw market price plus your configured adjustment. Verify it against your own Frank Energie contract; the correct adjustment depends on that contract.
+- The adjustment can be **positive** (extra compensation), **negative** (a deduction or feed-in cost), or **zero**. A negative feed-in price is possible and is not clamped to zero.
+- The sensor applies **no** energy tax, **no** sourcing markup and **no** net metering, and is not tied to the calendar year or to the phase-out of the Dutch net-metering scheme on January 1, 2027.
+
+> **About the price field used:** the public `marketPrices` query returns `marketPrice`, `marketPriceTax`, `sourcingMarkupPrice`, and `energyTaxPrice`. Verification against the live API showed that `marketPriceTax` is exactly 21% VAT on `marketPrice`, and that `sourcingMarkupPrice` (the sourcing fee) is a fixed amount that adds into the all-in **purchase** price. There is no explicit feed-in field. That's why the integration deliberately uses only the raw `marketPrice` -- excluding VAT, energy tax and sourcing markup -- as the basis for the feed-in price.
+
+---
+
+## Price zone dashboard
+
+A ready-made card showing today's cheap and expensive price zone. The integration calculates, the dashboard only displays — no price arithmetic is done in Jinja any more.
+
+![Frank price zones — today's cheap and expensive period, with threshold price and configured margin](images/frank-price-zones-dashboard.png)
+
+The percentages and thresholds shown come straight from the zone sensors' attributes. **The margin defaults to 15%**, but that is only the default: change it per zone under **Settings → Devices & Services → Frank Quarter Prices → Configure**. Set the cheap margin to 20% and the expensive one to 10%, and the card shows that automatically — nothing is hard-coded in the YAML.
+
+> **`card-mod` is optional** and used purely for styling — the colours, the rounding and the font sizes. Without it the card still works and the times stay large (they are markdown headings); simply omit the `card_mod` blocks. The integration does the calculating either way; the dashboard only displays.
+
+Add a new **Manual** dashboard card and paste:
+
+```yaml
+type: vertical-stack
+cards:
+  - type: heading
+    heading: Frank Energie
+    heading_style: title
+    icon: mdi:information-outline
+
+  - type: markdown
+    content: |-
+      {% set low_start = states('sensor.frank_cheapest_time_today') %}
+      {% set low_end = state_attr('sensor.frank_cheapest_today', 'end_timestamp') %}
+      {% set high_start = states('sensor.frank_most_expensive_time_today') %}
+      {% set high_end = state_attr('sensor.frank_most_expensive_today', 'end_timestamp') %}
+      {% set unusable = ['unknown', 'unavailable', 'none', ''] %}
+      {% if low_start not in unusable and low_end and high_start not in unusable and high_end %}
+      Today the price per kWh is lowest between **{{ low_start }}** and **{{ (low_end | as_datetime | as_local).strftime('%H:%M') }}**, and highest between **{{ high_start }}** and **{{ (high_end | as_datetime | as_local).strftime('%H:%M') }}**.
+      {% else %}
+      Today's prices are not available yet.
+      {% endif %}
+
+  - type: markdown
+    content: |-
+      {% set sensor = 'sensor.frank_cheap_zone_start_today' %}
+      {% set start = state_attr(sensor, 'time') %}
+      {% set end = state_attr('sensor.frank_cheap_zone_end_today', 'time') %}
+      {% set threshold = state_attr(sensor, 'threshold_eur_kwh') %}
+      {% set margin = state_attr(sensor, 'margin_percent') %}
+      ### 🏷️ Cheap price zone today
+      {% if start and end and threshold is not none %}
+      # {{ start }} – {{ end }}
+      ## ≤ € {{ '%.3f' | format(threshold | float(0)) }}/kWh
+
+      Within {{ margin | float(0) | round(0) | int }}% of the daily price range above the cheapest quarter of the day.
+      {% else %}
+      Not available yet.
+      {% endif %}
+    card_mod:
+      style:
+        ha-markdown $: |
+          h3 { font-size: 21px; font-weight: 600; margin: 0; }
+          h1 { font-size: 38px; font-weight: 700; line-height: 1.15; margin: 6px 0 0 0; }
+          h2 { font-size: 20px; font-weight: 500; margin: 2px 0 0 0; opacity: 0.9; }
+          p  { font-size: 14px; margin: 6px 0 0 0; opacity: 0.7; }
+        .: |
+          ha-card {
+            border-radius: 18px;
+            padding: 12px 18px;
+            background: rgba(50, 180, 90, 0.10);
+            border: 1px solid rgba(50, 180, 90, 0.28);
+          }
+
+  - type: markdown
+    content: |-
+      {% set sensor = 'sensor.frank_expensive_zone_start_today' %}
+      {% set start = state_attr(sensor, 'time') %}
+      {% set end = state_attr('sensor.frank_expensive_zone_end_today', 'time') %}
+      {% set threshold = state_attr(sensor, 'threshold_eur_kwh') %}
+      {% set margin = state_attr(sensor, 'margin_percent') %}
+      ### 📈 Expensive price zone today
+      {% if start and end and threshold is not none %}
+      # {{ start }} – {{ end }}
+      ## ≥ € {{ '%.3f' | format(threshold | float(0)) }}/kWh
+
+      Within {{ margin | float(0) | round(0) | int }}% of the daily price range below the most expensive quarter of the day.
+      {% else %}
+      Not available yet.
+      {% endif %}
+    card_mod:
+      style:
+        ha-markdown $: |
+          h3 { font-size: 21px; font-weight: 600; margin: 0; }
+          h1 { font-size: 38px; font-weight: 700; line-height: 1.15; margin: 6px 0 0 0; }
+          h2 { font-size: 20px; font-weight: 500; margin: 2px 0 0 0; opacity: 0.9; }
+          p  { font-size: 14px; margin: 6px 0 0 0; opacity: 0.7; }
+        .: |
+          ha-card {
+            border-radius: 18px;
+            padding: 12px 18px;
+            background: rgba(220, 60, 60, 0.09);
+            border: 1px solid rgba(220, 60, 60, 0.25);
+          }
 ```
 
-The correct adjustment depends on your own contract. Both examples are purely illustrative and do **not** represent an actual Frank Energie contract. A negative feed-in price is possible and is not clamped to zero.
-
-Example with **Apply 21% VAT to feed-in price** enabled:
-
-```text
-Verified market price: 0.00323 EUR/kWh
-Configured adjustment: 0.01820 EUR/kWh
-Estimated feed-in price: (0.00323 + 0.01820) × 1.21 = 0.0259303 EUR/kWh
-```
-
-About the VAT option:
-
-- The option is **disabled by default**; leave it off and the calculation stays exactly as shown above, without VAT.
-- **Verify yourself** in your own Frank Energie contract or statement whether your feed-in compensation is calculated including or excluding VAT — you remain responsible for the choice that fits your situation.
-- Enabling or disabling it is **not** tied to the calendar year. The integration does **not** automatically turn VAT on in 2026 or off in 2027.
-- VAT treatment and the net-metering scheme are **separate** matters. The phase-out of net metering does not automatically determine whether VAT applies.
-
-> **About the price field used:** the public `marketPrices` query returns `marketPrice`, `marketPriceTax`, `sourcingMarkupPrice`, and `energyTaxPrice`. Verification against the live API showed that `marketPriceTax` is exactly 21% VAT on `marketPrice` (a cost on the *purchase* side) and that there is no explicit feed-in field. That's why the integration deliberately uses only the raw `marketPrice` (excluding VAT, energy tax, or sourcing markup) as the basis for the feed-in price.
+While the zone sensors are unavailable the cards show "Not available yet" instead of a template error.
 
 ---
 
 ## Handling tomorrow's prices
 
-Frank Energie publishes the next day's prices in the early afternoon, shortly after the SDAC auction closes at 12:00 CET (in practice, **typically between 1 PM and 2 PM local time**). The integration handles this gracefully:
+Frank Energie publishes the next day's prices in the early afternoon, shortly after the SDAC auction closes at 12:00 CET (in practice, **typically between 13:00 and 14:00 market-local time**). Every time below is **market-local** — `Europe/Amsterdam` for NL, `Europe/Brussels` for BE — and therefore independent of the timezone Home Assistant is configured for. The integration handles this gracefully:
 
-- Tomorrow's prices are requested **from 12:00 local time** onward. Any request before that is a guaranteed miss, so it isn't made.
+- Tomorrow's prices are requested **from 12:00 market-local time** onward. Any request before that is a guaranteed miss, so it isn't made.
 - If they are **not yet available**:
   - the integration keeps `binary_sensor.frank_tomorrow_prices_available` **off**,
   - it leaves the `*_tomorrow` sensors **unavailable**,
   - it only logs an **info** message — an `UpdateFailed` is never raised and the integration is never marked as failed just because tomorrow is missing.
 - Once published, `binary_sensor.frank_tomorrow_prices_available` turns **on** and tomorrow's sensors populate at the next quarter-hour refresh.
+- If requests keep failing with a genuine error (an API outage rather than simply not-published-yet), then from the second consecutive failure the retry is held off to at most once every **30 minutes** instead of every quarter. A single failed request is simply retried on the next quarter tick.
 - Once a **full** day has been fetched, it is cached and not requested again. After midnight, the cached "tomorrow" becomes the new "today" without an extra request.
 
 Use the binary sensor to gate automations that depend on tomorrow's prices until they're actually available.
@@ -387,17 +533,17 @@ query MarketPrices($date: String!, $resolution: PriceResolution!) {
 }
 ```
 
-The integration requests `resolution: PT15M`, which returns **native quarter-hour prices (96 blocks per day)** — without authentication. The blocks are used exactly as returned and are never merged.
+The integration requests `resolution: PT15M`, which returns **native quarter-hour prices** — without authentication. That is normally **96 blocks per market day**, and **92 or 100** on the daylight-saving transition days. The blocks are used exactly as returned and are never merged.
 
-> **Important:** the `resolution: PriceResolution!` argument is what unlocks the quarter-hour data. Without it (or with `PT60M`), the same `marketPrices` query returns only **24 hourly blocks**, which is why the cheapest block used to jump to, for example, `14:00` instead of `13:45`. The `marketPricesElectricity(startDate, endDate)` query likewise only returns hourly data and is not used.
+> **Important:** the `resolution: PriceResolution!` argument is what unlocks the quarter-hour data. Without it (or with `PT60M`), the same `marketPrices` query returns only hourly blocks — normally **24 per market day**, and 23 or 25 on the transition days — which is why the cheapest block used to jump to, for example, `14:00` instead of `13:45`. The `marketPricesElectricity(startDate, endDate)` query likewise only returns hourly data and is not used.
 
-Requests use a 30-second timeout and are retried up to 3 times. Invalid records are validated and skipped. Belgium (BE) is supported by sending the `x-country: BE` header; the Netherlands (NL) is the default.
+Requests use a 30-second timeout and are attempted at most 3 times (so two retries). Invalid records are validated and skipped. Belgium (BE) is supported by sending the `x-country: BE` header; the Netherlands (NL) is the default.
 
 ---
 
 ## ApexCharts dashboard
 
-You can visualize the prices as a color-coded bar chart — **one bar per price block**. When Frank Energie returns native quarter-hour data you get **96 bars per day**; when only hourly data is available you get **24 bars**. The data is never merged.
+You can visualize the prices as a color-coded bar chart — **one bar per price block**. When Frank Energie returns native quarter-hour data you normally get **96 bars per day** (92 or 100 on the daylight-saving transition days); when only hourly data is available you normally get **24** (23 or 25 on those days). The data is never merged.
 
 ![Frank electricity price today — quarter-hour bars colored green/orange/red based on price](images/apexcharts_today.png)
 
@@ -493,7 +639,7 @@ card:
 
 ### Tomorrow's chart
 
-Same style, but reads `sensor.frank_prices_tomorrow`. The card stays empty until Frank Energie publishes tomorrow's prices (typically between 1 PM and 2 PM local time).
+Same style, but reads `sensor.frank_prices_tomorrow`. The card stays empty until Frank Energie publishes tomorrow's prices (typically between 13:00 and 14:00 market-local time).
 
 > **Note on the span:** `apexcharts-card` has no reliable "tomorrow" span offset. The chart relies on the `data_generator`, which emits real timestamps from `attributes.prices`, so every bar is plotted at its correct absolute time regardless of the configured window. `span.offset: +24h` is added as a hint; if your version of the card ignores it, the bars are still shown at the correct times because every point carries its own `from` datetime.
 
@@ -601,6 +747,52 @@ automation:
           entity_id: switch.dishwasher
 ```
 
+**Charge the home battery for the whole cheap price zone:**
+
+```yaml
+automation:
+  - alias: "Charge battery during the cheap price zone"
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.frank_cheap_period
+        to: "on"
+    action:
+      - service: switch.turn_on
+        target:
+          entity_id: switch.battery_charge
+```
+
+**Discharge the home battery as soon as the expensive price zone starts:**
+
+```yaml
+automation:
+  - alias: "Discharge battery during the expensive price zone"
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.frank_expensive_period
+        to: "on"
+    action:
+      - service: switch.turn_on
+        target:
+          entity_id: switch.battery_discharge
+```
+
+**Plan ahead against the exact moment the cheap zone starts:**
+
+```yaml
+automation:
+  - alias: "Notify 15 minutes before the cheap price zone"
+    trigger:
+      - platform: time
+        at:
+          entity_id: sensor.frank_cheap_zone_start_today
+          offset: "-00:15:00"
+    action:
+      - service: notify.persistent_notification
+        data:
+          message: "The cheap price zone starts in 15 minutes."
+```
+
 **Only react when the price is low enough (threshold):**
 
 ```yaml
@@ -663,33 +855,15 @@ automation:
 
 ---
 
-## Brand assets (integration icon)
-
-This integration ships with neutral, custom-made icon and logo assets (a lightning bolt for a quarter-hour clock, in a cloud-blue style). The **ready-to-use PNG files** are located under [custom_components/frank_quarter_prices/brand/](custom_components/frank_quarter_prices/brand/):
-
-- `icon.png` — 256×256
-- `icon@2x.png` — 512×512
-- `logo.png` — 256×256
-- `logo@2x.png` — 512×512
-
-The editable source files (SVG) are located under [custom_components/frank_quarter_prices/icons/](custom_components/frank_quarter_prices/icons/) (`icon.svg`, `logo.svg`). None of this material uses Frank Energie's official logo or any trademark.
-
-### The icon shows up everywhere (Home Assistant 2026.3+)
-
-Since **Home Assistant 2026.3**, custom integrations load their own brand assets directly from a local `brand/` folder inside the integration — a PR to the [home-assistant/brands](https://github.com/home-assistant/brands) repository is **no longer** required. Local brand images even take **priority** over the central Brands repository. This integration already includes that folder ([custom_components/frank_quarter_prices/brand/](custom_components/frank_quarter_prices/brand/)), so the icon shows up automatically everywhere — both on the integration card and in the **integrations list**.
-
-> **Still seeing *"icon not available"*?** Restart Home Assistant (or reload the integration) and clear your browser cache if needed. The images are served via `/api/brands/integration/frank_quarter_prices/icon.png`. On Home Assistant versions older than 2026.3, the list shows a generic placeholder image until you upgrade; this is purely cosmetic and doesn't affect functionality.
-
-> **Contributing to Home Assistant Core?** Only if this integration is ever merged into HA core should the local `brand/` files be removed and instead submitted via a PR to the [home-assistant/brands](https://github.com/home-assistant/brands) repository (folder `custom_integrations/frank_quarter_prices/`).
-
----
-
 ## Troubleshooting
 
 - **Entities show `unavailable`:**
-  - For the tomorrow / cheapest-tomorrow sensors, this is expected before Frank Energie publishes the next day (typically between 1 PM and 2 PM local time). Check `binary_sensor.frank_tomorrow_prices_available`.
+  - For the tomorrow / cheapest-tomorrow sensors, this is expected before Frank Energie publishes the next day (typically between 13:00 and 14:00 market-local time). Check `binary_sensor.frank_tomorrow_prices_available`.
   - For all sensors: check that the integration is loaded under **Settings → Devices & Services**.
-- **Entity IDs don't match this README:** see the note under [Configuration](#configuration) — adjust them to the IDs shown in **Developer Tools → States**.
+- **Entity IDs don't match this README:** check which IDs your installation actually uses via **Developer Tools → States** and adjust your automations accordingly.
+- **Zone entities show `unavailable`:** no *complete* price series is known for today yet. A zone describes the whole day, so it is deliberately not derived from half a day. Check `sensor.frank_prices_today`: if it holds less than a full day (normally 96 blocks, 92 or 100 around the daylight-saving change), the zones fill in as soon as the day completes.
+- **Zone entities stay `unavailable` while the day is complete:** that only happens when every quarter of the day has exactly the same price, leaving no cheap-versus-expensive distinction.
+- **Price zones look wrong:** the zone is the *longest contiguous* run of quarters within the configured margin, not every cheap quarter of the day. Check the `threshold_eur_kwh` and `margin_percent` attributes on the zone sensor to see which threshold was used.
 - **No data at all:** check that Home Assistant has outbound internet access to `https://graphql.frankenergie.nl/`.
 - **Enable debug logging** by adding this to `configuration.yaml` and restarting:
 
@@ -719,19 +893,25 @@ No. Market prices are public and require no authentication.
 No. It shows the market-price components (market price, tax, sourcing markup, energy tax). Your actual tariff may differ depending on your contract.
 
 **What resolution do the prices have?**
-Native quarter-hour prices (15 minutes, **96 blocks per day**) — the integration requests `resolution: PT15M` via the public `marketPrices` query. If Frank Energie has no quarter-hour data for a given day, hourly data (60 minutes, 24 blocks) is returned instead. The blocks are used exactly as returned and are never merged, so the cheapest/most-expensive times reflect the exact quarter-hour start (e.g. `13:45`).
+Native quarter-hour prices (15 minutes): normally **96 blocks per market day**, and 92 or 100 on the daylight-saving transition days. The integration requests `resolution: PT15M` via the public `marketPrices` query. If Frank Energie has no quarter-hour data for a given day, hourly data is returned instead (60 minutes; normally 24 blocks, 23 or 25 on those transition days). The blocks are used exactly as returned and are never merged, so the cheapest/most-expensive times reflect the exact quarter-hour start (e.g. `13:45`).
 
 **How often is it updated?**
 Every quarter hour, synchronized with the real quarter-hour boundaries (`:00`/`:15`/`:30`/`:45`). The active quarter-hour price is recalculated locally from the cached daily series; a request to the API is only made for a day that's still missing.
 
 **Why is tomorrow empty in the morning?**
-Frank Energie publishes the next day's prices in the early afternoon (typically between 1 PM and 2 PM local time). The integration requests them starting at 12:00 local time. The `*_tomorrow` sensors stay unavailable until then, and the integration never raises an error in the meantime.
+Frank Energie publishes the next day's prices in the early afternoon (typically between 13:00 and 14:00 market-local time). The integration requests them starting at 12:00 market-local time. The `*_tomorrow` sensors stay unavailable until then, and the integration never raises an error in the meantime.
 
 **Does it support Belgium?**
 Yes — the Netherlands (NL) is the default; Belgian (BE) prices are requested via the `x-country` header.
 
 **Can I use the quarter-hour prices for a home battery?**
-Yes. The cheapest and most expensive price-window sensors (with `timestamp` and `end_timestamp`) are designed to align a home battery's charge and discharge moments. See [EMS integration examples](#ems-integration-examples).
+Yes. The cheapest and most expensive price-window sensors (with `timestamp` and `end_timestamp`) and the price zones (with `binary_sensor.frank_cheap_period` / `binary_sensor.frank_expensive_period`) are designed to align a home battery's charge and discharge moments. See [EMS integration examples](#ems-integration-examples).
+
+**What is the difference between "cheapest" and the "cheap price zone"?**
+`sensor.frank_cheapest_today` points at the *single* cheapest quarter of the day. The cheap price zone is the longest *contiguous period* of quarters falling within the configured margin (15% of the daily price range by default) above that cheapest quarter — so usually a block of one or more hours. See [Price zones](#price-zones-cheap--expensive).
+
+**Do the price zones cost extra API requests?**
+No. They are derived locally from the price series the integration has already fetched and cached, once per quarter-hour refresh.
 
 **Can I use Frank Quarter Prices in an EMS?**
 Yes. The `sensor.frank_prices_today` and `sensor.frank_prices_tomorrow` sensors expose the full quarter-hour series (with resolution, average, min, and max price) as an attribute, so an external or self-built Energy Management System can plan directly against it.

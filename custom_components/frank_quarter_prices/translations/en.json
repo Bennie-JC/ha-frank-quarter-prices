@@ -19,11 +19,15 @@
         "title": "Frank Quarter Prices",
         "data": {
           "feed_in_adjustment": "Feed-in adjustment",
-          "apply_feed_in_vat": "Apply 21% VAT to feed-in price"
+          "apply_feed_in_vat": "Apply 21% VAT to feed-in price",
+          "cheap_zone_margin_percent": "Cheap price-zone margin",
+          "expensive_zone_margin_percent": "Expensive price-zone margin"
         },
         "data_description": {
           "feed_in_adjustment": "The amount in EUR/kWh added to the verified current market price to calculate the estimated feed-in price. Use a positive value for an additional compensation, a negative value for a deduction, or zero to use the market price unchanged. Contract conditions may differ.",
-          "apply_feed_in_vat": "Enable this when the feed-in compensation should be calculated including 21% VAT. VAT is applied to the market price plus the configured feed-in adjustment. Leave this disabled when your compensation is calculated excluding VAT. Verify this against your own Frank Energie contract or statement."
+          "apply_feed_in_vat": "Enable this when the feed-in compensation should be calculated including 21% VAT. VAT is applied to the market price plus the configured feed-in adjustment. Leave this disabled when your compensation is calculated excluding VAT. Verify this against your own Frank Energie contract or statement.",
+          "cheap_zone_margin_percent": "The percentage of the day's total price range, measured upward from the cheapest quarter, that is still considered cheap. The longest contiguous run of quarters within that limit forms the cheap price zone. Default 15%, maximum 49%.",
+          "expensive_zone_margin_percent": "The percentage of the day's total price range, measured downward from the most expensive quarter, that is still considered expensive. The longest contiguous run of quarters within that limit forms the expensive price zone. Default 15%, maximum 49%."
         }
       }
     }

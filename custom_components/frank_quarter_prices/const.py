@@ -33,8 +33,37 @@ CONF_APPLY_FEED_IN_VAT: Final = "apply_feed_in_vat"
 DEFAULT_APPLY_FEED_IN_VAT: Final = False
 FEED_IN_VAT_RATE: Final = 0.21
 
+# Daily price zones.
+#
+# Both margins are a percentage of the day's own price *range* (its most
+# expensive quarter minus its cheapest), measured inward from the respective
+# extreme. Applying the percentage to the absolute all-in price instead does not
+# work: that price carries a fixed ~0.129 EUR/kWh energy-tax and markup floor
+# that dwarfs the daily spread, so on a flat winter day a 15% band exceeds the
+# whole day's range and the cheap and expensive zones overlap. Measured against
+# a year of real Frank data, the absolute-price formula produced contradictory
+# zones on 33 of 317 days at 15% and on 90 of 317 at 25%.
+CONF_CHEAP_ZONE_MARGIN_PERCENT: Final = "cheap_zone_margin_percent"
+CONF_EXPENSIVE_ZONE_MARGIN_PERCENT: Final = "expensive_zone_margin_percent"
+DEFAULT_ZONE_MARGIN_PERCENT: Final = 15.0
+
+# Accepted margin range. 0% selects only the quarters priced exactly at the
+# day's extreme. The maximum is 49% rather than 50% so that the two bands are
+# separated *by construction*: the cheap band ends at
+# ``day_min + spread * cheap%`` and the expensive band starts at
+# ``day_min + spread * (100 - expensive%)``, so they stay disjoint as long as
+# ``cheap% + expensive% < 100``. Capping each at 49 guarantees at most 98.
+MIN_ZONE_MARGIN_PERCENT: Final = 0.0
+MAX_ZONE_MARGIN_PERCENT: Final = 49.0
+ZONE_MARGIN_PERCENT_STEP: Final = 1.0
+
+# Zone modes accepted by ``price_zone.calculate_price_zone``.
+ZONE_MODE_CHEAP: Final = "cheap"
+ZONE_MODE_EXPENSIVE: Final = "expensive"
+
 # Shared price unit for the monetary sensors.
 PRICE_UNIT_EUR_KWH: Final = "EUR/kWh"
+PERCENT_UNIT: Final = "%"
 
 # Frank Energie GraphQL API.
 GRAPHQL_ENDPOINT: Final = "https://graphql.frankenergie.nl/"
@@ -46,6 +75,20 @@ COUNTRY_NL: Final = "NL"
 COUNTRY_BE: Final = "BE"
 SUPPORTED_COUNTRIES: Final[tuple[str, ...]] = (COUNTRY_NL, COUNTRY_BE)
 DEFAULT_COUNTRY: Final = COUNTRY_NL
+
+# Timezone each market's price day is published in.
+#
+# Frank publishes a *market* day: midnight-to-midnight in the market's own
+# timezone. Home Assistant's configured timezone is a display preference and may
+# be anything at all, so it must never define which blocks belong to "today",
+# nor where the day starts and ends when validating that a fetched day is
+# complete. A Home Assistant running in UTC would otherwise see every Dutch day
+# as two hours short, never accept one as complete, and re-request both days on
+# every quarter tick forever.
+MARKET_TIMEZONES: Final[dict[str, str]] = {
+    COUNTRY_NL: "Europe/Amsterdam",
+    COUNTRY_BE: "Europe/Brussels",
+}
 
 # The coordinator refreshes on these wall-clock minute boundaries rather than on
 # a free-running interval, so the active price block and the today/tomorrow

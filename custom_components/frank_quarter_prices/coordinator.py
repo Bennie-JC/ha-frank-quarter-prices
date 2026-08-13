@@ -13,6 +13,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    DEFAULT_COUNTRY,
     DOMAIN,
     QUARTER_BOUNDARY_MINUTES,
     QUARTER_TICK_OFFSET_SECONDS,
@@ -20,6 +21,12 @@ from .const import (
     TOMORROW_PUBLISH_HOUR,
 )
 from .frank_client import FrankClient, FrankClientAuthError, FrankClientError
+from .market_time import market_date_of, market_day_bounds, market_now
+from .price_zone import (
+    calculate_price_zones,
+    get_cheap_zone_margin_percent,
+    get_expensive_zone_margin_percent,
+)
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -30,6 +37,16 @@ _LOGGER = logging.getLogger(__name__)
 DEFAULT_RESOLUTION_MINUTES = 15
 
 
+def _zone_summary(zone: dict[str, Any] | None) -> str:
+    """Render a zone compactly for the debug log."""
+    if not zone:
+        return "none"
+    return (
+        f"{dt_util.as_local(zone['start']):%H:%M}-{dt_util.as_local(zone['end']):%H:%M}"
+        f" (threshold {zone['threshold_eur_kwh']} @ {zone['margin_percent']}%)"
+    )
+
+
 class FrankQuarterPricesCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Coordinate fetching of Frank quarter prices."""
 
@@ -38,20 +55,25 @@ class FrankQuarterPricesCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         hass: HomeAssistant,
         entry: ConfigEntry,
         client: FrankClient,
+        country: str = DEFAULT_COUNTRY,
     ) -> None:
         """Initialize the coordinator."""
         self.client = client
         self.entry = entry
+        # The market whose calendar day Frank publishes. Every "which day is
+        # this" decision below is made in this timezone, never in Home
+        # Assistant's — see :mod:`.market_time`.
+        self.country = country
         # Integration version (e.g. "0.1.1"), populated during setup and exposed
         # as the device ``sw_version``. Falls back to "unknown" if not set.
         self.integration_version: str = "unknown"
 
-        # Published price blocks per local calendar day. Filled by the API and
+        # Published price blocks per *market* calendar day. Filled by the API and
         # then read locally: a day already held here is never requested again,
         # so the quarter ticks derive the active block from memory instead of
         # re-downloading two lists that change at most twice a day.
         self._prices_by_day: dict[date_type, list[dict[str, Any]]] = {}
-        # Days whose cached list covers the complete local day. A day missing
+        # Days whose cached list covers the complete market day. A day missing
         # from this set is still fetched again: a partial response stays usable
         # for the current cycle but must never freeze in for the rest of the day.
         self._complete_days: set[date_type] = set()
@@ -104,7 +126,10 @@ class FrankQuarterPricesCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         which cannot fail and needs no network. A failed *optional* request
         therefore no longer takes every price entity to ``unavailable``.
         """
-        now = dt_util.now()
+        # Market time, not Home Assistant time: these three values decide which
+        # days are fetched, cached and published, and they must match the day
+        # Frank actually publishes regardless of how Home Assistant is set up.
+        now = market_now(self.country)
         today = now.date()
         tomorrow = today + timedelta(days=1)
 
@@ -135,13 +160,42 @@ class FrankQuarterPricesCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             else None
         )
 
+        # Derive today's price zones once per update, here, so the four zone
+        # sensors and the two period binary sensors all read one shared result
+        # and can never disagree. This is pure local arithmetic over the blocks
+        # already held above: no request, no second cache, no second scheduler.
+        #
+        # A zone claims to describe the *whole* local day: "the cheapest stretch
+        # of today". Deriving one from a partial list would silently answer a
+        # different question — the cheapest stretch of the part that happens to
+        # have arrived — and an EMS could charge on it at what is really an
+        # expensive hour. So the zones are gated on the coordinator's own
+        # authoritative completeness set (see ``_covers_full_market_day``) rather
+        # than on a second, weaker notion of "enough data". No complete day, no
+        # zone: the six zone entities go unavailable instead of misleading.
+        cheap_zone: dict[str, Any] | None = None
+        expensive_zone: dict[str, Any] | None = None
+        if today in self._complete_days:
+            cheap_zone, expensive_zone = calculate_price_zones(
+                today_prices,
+                get_cheap_zone_margin_percent(self.entry.options),
+                get_expensive_zone_margin_percent(self.entry.options),
+            )
+        elif today_prices:
+            _LOGGER.debug(
+                "Today is incomplete (%d block(s)); publishing no price zones",
+                len(today_prices),
+            )
+
         _LOGGER.debug(
             "Update: today=%d blocks, tomorrow=%d blocks (available=%s), "
-            "resolution=%d min",
+            "resolution=%d min, cheap_zone=%s, expensive_zone=%s",
             len(today_prices),
             len(tomorrow_prices),
             tomorrow_available,
             resolution_minutes,
+            _zone_summary(cheap_zone),
+            _zone_summary(expensive_zone),
         )
 
         return {
@@ -151,6 +205,8 @@ class FrankQuarterPricesCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "current_price": current_price,
             "current_price_block": current_price_block,
             "resolution_minutes": resolution_minutes,
+            "cheap_zone": cheap_zone,
+            "expensive_zone": expensive_zone,
             "last_update": now,
             "last_attempt": now,
         }
@@ -181,7 +237,7 @@ class FrankQuarterPricesCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         the difference between a working current price and no current price at
         all. Merging can also complete a day that arrived in two pieces.
         """
-        if self._covers_full_local_day(prices, day):
+        if self._covers_full_market_day(prices, day):
             self._prices_by_day[day] = prices
             self._complete_days.add(day)
             return
@@ -201,7 +257,7 @@ class FrankQuarterPricesCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         merged = self._merge_blocks(self._prices_by_day.get(day, []), prices)
         self._prices_by_day[day] = merged
-        if self._covers_full_local_day(merged, day):
+        if self._covers_full_market_day(merged, day):
             self._complete_days.add(day)
 
     @staticmethod
@@ -227,19 +283,25 @@ class FrankQuarterPricesCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         by_start.update({dt_util.as_utc(block["from"]): block for block in fresh})
         return [by_start[start] for start in sorted(by_start)]
 
-    @staticmethod
-    def _covers_full_local_day(prices: list[dict[str, Any]], day: date_type) -> bool:
-        """Return whether the blocks cover the complete local calendar day.
+    def _covers_full_market_day(
+        self, prices: list[dict[str, Any]], day: date_type
+    ) -> bool:
+        """Return whether the blocks cover the complete *market* calendar day.
 
-        Completeness is measured against the real local-midnight-to-local-
+        Completeness is measured against the real market-midnight-to-market-
         midnight span rather than a fixed block count, so the 23-hour spring-
         forward day (92 quarters) and the 25-hour fall-back day (100 quarters)
         both validate correctly — as does an hourly fallback response.
 
-        Sorting and comparison happen on absolute UTC instants. Local wall
-        clock will not do: on the fall-back day 02:00-03:00 runs twice, and two
-        same-zone datetimes differing only in ``fold`` compare equal, which
-        both mis-sorts the repeated hour and lets a gap through unnoticed.
+        The span comes from the market's timezone, never Home Assistant's. A
+        Home Assistant configured in UTC would otherwise measure a Dutch day
+        against UTC midnights, find every day two hours short, and never accept
+        one as complete.
+
+        Sorting and comparison happen on absolute UTC instants. Wall clock will
+        not do: on the fall-back day 02:00-03:00 runs twice, and two same-zone
+        datetimes differing only in ``fold`` compare equal, which both mis-sorts
+        the repeated hour and lets a gap through unnoticed.
         """
         spans = sorted(
             (dt_util.as_utc(p["from"]), dt_util.as_utc(p["till"]))
@@ -250,8 +312,9 @@ class FrankQuarterPricesCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if not spans:
             return False
 
-        cursor = dt_util.as_utc(dt_util.start_of_local_day(day))
-        end = dt_util.as_utc(dt_util.start_of_local_day(day + timedelta(days=1)))
+        day_start, day_end = market_day_bounds(day, self.country)
+        cursor = dt_util.as_utc(day_start)
+        end = dt_util.as_utc(day_end)
         for start, till in spans:
             # Any gap, overlap or duplicate breaks the chain, so a list with a
             # hole in it can never be mistaken for a complete day.
@@ -333,22 +396,32 @@ class FrankQuarterPricesCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Return whether the tomorrow request should be held off after errors."""
         if self._tomorrow_errors < 2 or self._tomorrow_error_at is None:
             return False
-        elapsed = now - self._tomorrow_error_at
+        # Absolute instants again: subtracting two datetimes that share one
+        # ``tzinfo`` object yields the naive wall-clock delta, which is off by
+        # an hour in both directions across a daylight-saving transition.
+        elapsed = dt_util.as_utc(now) - dt_util.as_utc(self._tomorrow_error_at)
         # A backwards clock jump (the DST fall-back hour) must not park the
         # retry for an hour, so only a forward-running gap counts.
         if elapsed < timedelta(0):
             return False
         return elapsed < timedelta(minutes=TOMORROW_ERROR_BACKOFF_MINUTES)
 
-    @staticmethod
     def _filter_for_day(
-        prices: list[dict[str, Any]], day: Any
+        self, prices: list[dict[str, Any]], day: Any
     ) -> list[dict[str, Any]]:
-        """Keep only blocks whose local start falls on the given calendar day."""
+        """Keep only blocks whose *market* start falls on the given day.
+
+        Grouping on Home Assistant's local date instead would move blocks into
+        the wrong day for any installation that is not on market time, silently
+        shifting the whole today/tomorrow split.
+        """
         result: list[dict[str, Any]] = []
         for block in prices:
             start = block.get("from")
-            if isinstance(start, datetime) and dt_util.as_local(start).date() == day:
+            if (
+                isinstance(start, datetime)
+                and market_date_of(start, self.country) == day
+            ):
                 result.append(block)
         return result
 
@@ -367,14 +440,24 @@ class FrankQuarterPricesCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def _determine_current_block(
         prices: list[dict[str, Any]], now: datetime
     ) -> dict[str, Any] | None:
-        """Return the price block for the currently active time slot."""
+        """Return the price block for the currently active time slot.
+
+        Compared on absolute UTC instants. Comparing the aware datetimes
+        directly is not equivalent: CPython short-circuits ``<`` between two
+        datetimes that share the *same* ``tzinfo`` object to a naive wall-clock
+        comparison that ignores ``fold`` — and ``ZoneInfo`` is cached per key,
+        so market blocks and a market-time ``now`` always share one object. On
+        the fall-back day 02:00-03:00 runs twice, both passes compare equal,
+        and the first-pass block would be returned for the whole second hour.
+        """
+        now_utc = dt_util.as_utc(now)
         for price in prices:
             start = price.get("from")
             end = price.get("till")
             if (
                 isinstance(start, datetime)
                 and isinstance(end, datetime)
-                and start <= now < end
+                and dt_util.as_utc(start) <= now_utc < dt_util.as_utc(end)
             ):
                 return price
         return None
@@ -436,6 +519,20 @@ class FrankQuarterPricesCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def get_most_expensive_tomorrow(self) -> dict[str, Any] | None:
         """Return the most expensive price block for tomorrow."""
         return self._max_by_total(self._tomorrow())
+
+    # --- Price zones -------------------------------------------------------
+    #
+    # Both zones are calculated once per coordinator update (see
+    # ``_async_update_data``). These accessors only hand out that one shared
+    # result, so every zone entity is guaranteed to describe the same window.
+
+    def get_cheap_zone(self) -> dict[str, Any] | None:
+        """Return today's cheap price zone, or None when it is unknown."""
+        return (self.data or {}).get("cheap_zone")
+
+    def get_expensive_zone(self) -> dict[str, Any] | None:
+        """Return today's expensive price zone, or None when it is unknown."""
+        return (self.data or {}).get("expensive_zone")
 
     # --- Statistics helpers -----------------------------------------------
 

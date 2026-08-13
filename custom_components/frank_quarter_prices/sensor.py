@@ -42,6 +42,39 @@ _EXTREMUM_DEFINITIONS: tuple[tuple[str, str, str, str, bool], ...] = (
     ),
 )
 
+# Definitions for the four price-zone boundary sensors.
+# Each tuple is: (key, name, coordinator helper, zone edge, icon).
+_ZONE_DEFINITIONS: tuple[tuple[str, str, str, str, str], ...] = (
+    (
+        "cheap_zone_start_today",
+        "Cheap zone start today",
+        "get_cheap_zone",
+        "start",
+        "mdi:clock-start",
+    ),
+    (
+        "cheap_zone_end_today",
+        "Cheap zone end today",
+        "get_cheap_zone",
+        "end",
+        "mdi:clock-end",
+    ),
+    (
+        "expensive_zone_start_today",
+        "Expensive zone start today",
+        "get_expensive_zone",
+        "start",
+        "mdi:clock-start",
+    ),
+    (
+        "expensive_zone_end_today",
+        "Expensive zone end today",
+        "get_expensive_zone",
+        "end",
+        "mdi:clock-end",
+    ),
+)
+
 
 def _hhmm(value: Any) -> str | None:
     """Format a datetime as a local ``HH:MM`` string."""
@@ -93,6 +126,31 @@ def _serialize_prices(prices: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [b for b in (_full_block(p) for p in prices) if b is not None]
 
 
+def zone_attributes(zone: dict[str, Any] | None, edge: str) -> dict[str, Any]:
+    """Return the shared attribute contract for one price-zone boundary.
+
+    All four zone sensors publish the same key set, produced here exactly once,
+    so each entity is independently usable in a template or automation without
+    having to look up its sibling — while the values still come from the single
+    zone the coordinator derived.
+    """
+    if zone is None:
+        return {}
+    return {
+        # Convenience mirror of the state in the ``HH:MM`` style the existing
+        # ``*_time_today`` sensors use; the state itself is a real timestamp.
+        "time": _hhmm(zone.get(edge)),
+        "zone_start": _local_iso(zone.get("start")),
+        "zone_end": _local_iso(zone.get("end")),
+        "margin_percent": zone.get("margin_percent"),
+        "threshold_eur_kwh": zone.get("threshold_eur_kwh"),
+        "day_min_price": zone.get("day_min_price"),
+        "day_max_price": zone.get("day_max_price"),
+        "zone_duration_minutes": zone.get("duration_minutes"),
+        "quarter_count": zone.get("quarter_count"),
+    }
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: FrankQuarterPricesConfigEntry,
@@ -127,6 +185,11 @@ async def async_setup_entry(
                 is_tomorrow,
             )
         )
+
+    entities.extend(
+        FrankPriceZoneBoundarySensor(coordinator, key, name, method_name, edge, icon)
+        for key, name, method_name, edge, icon in _ZONE_DEFINITIONS
+    )
 
     async_add_entities(entities)
 
@@ -396,3 +459,65 @@ class FrankBlockTimeSensor(FrankBlockSensorBase):
             "duration_minutes": block.get("duration_minutes"),
             "full_block": _full_block(block),
         }
+
+
+class FrankPriceZoneBoundarySensor(FrankQuarterPricesEntity, SensorEntity):
+    """Sensor exposing one boundary of today's cheap or expensive price zone.
+
+    The state is a **timezone-aware datetime** with the ``timestamp`` device
+    class rather than the ``HH:MM`` string the older ``*_time_today`` sensors
+    use. These are new entities with no existing consumers, and a real timestamp
+    is what makes them directly usable in an automation trigger or condition
+    without any parsing or date guessing. The familiar ``HH:MM`` rendering stays
+    available as the ``time`` attribute, so dashboards keep the project's
+    existing look.
+
+    The zone itself is derived once per coordinator update; this entity only
+    reads that shared result and never performs its own search or request.
+    """
+
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+
+    def __init__(
+        self,
+        coordinator: FrankQuarterPricesCoordinator,
+        key: str,
+        name: str,
+        method_name: str,
+        edge: str,
+        icon: str,
+    ) -> None:
+        """Initialize the zone-boundary sensor."""
+        super().__init__(coordinator, key, name)
+        self._method_name = method_name
+        self._edge = edge
+        self._attr_icon = icon
+
+    def _zone(self) -> dict[str, Any] | None:
+        """Return the shared zone this sensor describes."""
+        return getattr(self.coordinator, self._method_name)()
+
+    @property
+    def available(self) -> bool:
+        """Available only while today's data yields a zone.
+
+        Without a zone the entity goes unavailable rather than keeping the
+        previous day's boundary, so a stale time can never be published.
+        """
+        if not super().available:
+            return False
+        return self._zone() is not None
+
+    @property
+    def native_value(self) -> datetime | None:
+        """Return the zone boundary as an aware datetime."""
+        zone = self._zone()
+        if zone is None:
+            return None
+        value = zone.get(self._edge)
+        return value if isinstance(value, datetime) else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return the shared price-zone attribute contract."""
+        return zone_attributes(self._zone(), self._edge)

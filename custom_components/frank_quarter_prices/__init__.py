@@ -28,7 +28,9 @@ async def async_setup_entry(
         CONF_COUNTRY, entry.data.get(CONF_COUNTRY, DEFAULT_COUNTRY)
     )
     client = FrankClient(hass=hass, entry=entry, country=country)
-    coordinator = FrankQuarterPricesCoordinator(hass=hass, entry=entry, client=client)
+    coordinator = FrankQuarterPricesCoordinator(
+        hass=hass, entry=entry, client=client, country=country
+    )
 
     # Expose the integration version as the device sw_version.
     integration = await async_get_integration(hass, DOMAIN)

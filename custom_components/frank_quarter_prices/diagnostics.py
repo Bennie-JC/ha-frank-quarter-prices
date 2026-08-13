@@ -7,6 +7,14 @@ from typing import TYPE_CHECKING, Any
 from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.core import HomeAssistant
 
+from .const import CONF_COUNTRY, DEFAULT_COUNTRY
+from .market_time import market_timezone
+from .price import MARKET_PRICE_FIELD, get_apply_feed_in_vat, get_feed_in_adjustment
+from .price_zone import (
+    get_cheap_zone_margin_percent,
+    get_expensive_zone_margin_percent,
+)
+
 if TYPE_CHECKING:
     from . import FrankQuarterPricesConfigEntry
 
@@ -18,17 +26,53 @@ TO_REDACT: set[str] = set()
 async def async_get_config_entry_diagnostics(
     hass: HomeAssistant, entry: FrankQuarterPricesConfigEntry
 ) -> dict[str, Any]:
-    """Return diagnostics for a config entry."""
-    coordinator = entry.runtime_data
+    """Return diagnostics for a config entry.
+
+    ``runtime_data`` only exists while the entry is loaded: Home Assistant
+    deletes it on unload, and it is never set when setup fails. The diagnostics
+    endpoint has no such precondition — it serves any entry that exists — so
+    reading it unguarded would answer with a 500 exactly when the entry is in
+    ``SETUP_RETRY`` (the Frank API was down at startup) and a user is trying to
+    collect diagnostics to report that. The settings below need no coordinator,
+    so they are always reported.
+    """
+    coordinator = getattr(entry, "runtime_data", None)
+    country = entry.options.get(
+        CONF_COUNTRY, entry.data.get(CONF_COUNTRY, DEFAULT_COUNTRY)
+    )
 
     return {
         "entry": {
             "title": entry.title,
+            "state": str(entry.state),
             "data": async_redact_data(dict(entry.data), TO_REDACT),
             "options": async_redact_data(dict(entry.options), TO_REDACT),
         },
         "coordinator": {
-            "last_update_success": coordinator.last_update_success,
-            "data": coordinator.data,
+            "loaded": coordinator is not None,
+            "last_update_success": (
+                coordinator.last_update_success if coordinator else None
+            ),
+            "data": coordinator.data if coordinator else None,
+        },
+        # The derived cheap/expensive zones themselves already travel inside
+        # ``coordinator.data``; only the resolved settings behind them are added
+        # here, so the effective values are visible even on a day that yields no
+        # zone at all.
+        "resolved_options": {
+            # The market whose day the prices describe, and the timezone that
+            # defines it — the two most useful facts when a day is not
+            # validating as complete. Home Assistant's own timezone is shown
+            # alongside precisely because the two may legitimately differ.
+            "country": country,
+            "market_timezone": str(market_timezone(country)),
+            "homeassistant_timezone": str(hass.config.time_zone),
+            "cheap_margin_percent": get_cheap_zone_margin_percent(entry.options),
+            "expensive_margin_percent": get_expensive_zone_margin_percent(
+                entry.options
+            ),
+            "return_price_source": MARKET_PRICE_FIELD,
+            "return_price_apply_vat": get_apply_feed_in_vat(entry.options),
+            "return_price_feed_in_adjustment": get_feed_in_adjustment(entry.options),
         },
     }

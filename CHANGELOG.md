@@ -5,6 +5,37 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.6] - Unreleased
+
+### Added
+
+- Dagelijkse **prijszones**: de langste aaneengesloten goedkope en dure periode van vandaag, lokaal afgeleid uit de prijsreeks die al is opgehaald.
+- Vier nieuwe sensoren met de zonegrenzen: `sensor.frank_cheap_zone_start_today`, `sensor.frank_cheap_zone_end_today`, `sensor.frank_expensive_zone_start_today` en `sensor.frank_expensive_zone_end_today`. Hun status is een tijdzonebewuste tijdstempel (`device_class: timestamp`), direct bruikbaar in een automatiseringstrigger; de vertrouwde `"HH:MM"`-weergave blijft beschikbaar als het attribuut `time`.
+- Twee nieuwe binaire sensoren, `binary_sensor.frank_cheap_period` en `binary_sensor.frank_expensive_period`, die aangeven of de huidige lokale tijd binnen de betreffende zone valt (`start <= nu < eind`). Ze zijn onbeschikbaar wanneer er voor vandaag geen zone bepaald kan worden en tonen nooit een zone van gisteren.
+- Twee nieuwe instelbare opties in de Options Flow: **Marge goedkope prijszone** en **Marge dure prijszone**, beide standaard 15%, instelbaar van 0 tot 49% in stappen van 1%. Nederlandse en Engelse vertalingen toegevoegd.
+- De zonemarge is een percentage van het **prijsverschil van de dag zelf** (duurste kwartier min goedkoopste), niet van de prijs in euro's. Daardoor kunnen de goedkope en de dure zone elkaar per definitie niet overlappen zolang beide marges samen onder de 100% blijven; het maximum van 49% garandeert dat.
+- De prijszones worden alleen afgeleid uit een **volledige** marktdag. Zolang de prijsreeks van vandaag onvolledig is, blijven de zes zone-entiteiten onbeschikbaar in plaats van een zone uit een halve dag te tonen. Is de dag volledig vlak (alle kwartieren exact dezelfde prijs), dan is er geen goedkoop-versus-duur onderscheid en blijven de zones eveneens onbeschikbaar.
+- De Frank-marktdag wordt nu bepaald in de **tijdzone van de markt** (`Europe/Amsterdam` voor NL, `Europe/Brussels` voor BE) in plaats van in de tijdzone die in Home Assistant is ingesteld. Een Home Assistant op bijvoorbeeld UTC zag een Nederlandse dag daardoor twee uur te kort, waardoor geen enkele dag ooit als volledig werd geaccepteerd, de zone-entiteiten permanent onbeschikbaar bleven en beide dagen bij iedere kwartiertik opnieuw werden opgehaald.
+- Diagnostiek toont nu ook het land, de markttijdzone, de Home Assistant-tijdzone, de effectief gebruikte marges en de bron van de terugleverprijsberekening, en werkt ook wanneer de integratie niet geladen is.
+- GitHub Actions-workflow `tests.yml` toegevoegd, die de volledige pytest-suite op Ubuntu draait bij elke push naar `main` en elke pull request.
+- Het actieve kwartier en de zone-lidmaatschapstoets vergelijken nu op absolute tijdstippen. Python vergelijkt twee tijdzonebewuste datums die dezelfde `tzinfo` delen naïef op de wandklok en negeert daarbij `fold`; op de dag van de overgang naar wintertijd komt 02:00–03:00 twee keer voor, waardoor de actuele prijs een uur lang die van het vorige uur toonde en de periode-sensoren een uur te vroeg konden omschakelen.
+
+### Changed
+
+- README en README_EN: configuratiesectie met alle vier de instellingen toegevoegd, sensoroverzicht bijgewerkt naar 19 entiteiten, prijszones en marktdaggedrag gedocumenteerd, dashboardvoorbeeld herschreven zodat het de nieuwe zonesensoren toont in plaats van de zones zelf in Jinja te berekenen, EMS-voorbeelden met de nieuwe binaire sensoren toegevoegd en een schermafbeelding van de prijszonekaart opgenomen.
+- README en README_EN: de lange rekenvoorbeelden voor de terugleverprijs ingekort tot één korte, accurate uitleg, en de sectie met merkmateriaal verwijderd. De merkbestanden zelf blijven ongewijzigd in de repository.
+
+### Compatibility
+
+- Bestaande entity ID's, unique ID's, namen, eenheden, device classes, attributen en de today/tomorrow-datastructuren zijn ongewijzigd. De zes nieuwe entiteiten zijn puur additief.
+- De kwartiergrens-synchronisatie uit v0.1.4 en het cachegedrag uit v0.1.5 zijn ongewijzigd. De prijszones worden lokaal afgeleid en kosten aantoonbaar **nul** extra API-aanvragen: geen eigen client, geen tweede coordinator, geen extra timer of kwartiergrens-listener.
+- Bestaande installaties zonder de nieuwe opties gebruiken automatisch 15%/15%. Opnieuw toevoegen of migreren is niet nodig; een onbekende sleutel uit een oudere versie in de opgeslagen configuratie wordt genegeerd, en een opgeslagen marge buiten het bereik wordt veilig teruggebracht naar 0 of 49.
+- De berekening van `sensor.frank_current_return_price` is **niet** gewijzigd en de handmatige teruglevercorrectie blijft beschikbaar, net als de btw-optie. Zie de toelichting hieronder.
+
+### Notes
+
+- Onderzocht is of `sourcing_markup_price` gebruikt kan worden als automatische teruglevercorrectie, zodat de handmatige instelling zou kunnen vervallen. Verificatie tegen de live Frank Energie API wees uit dat dit veld een vast bedrag is (NL: `0.01815 EUR/kWh` op elk kwartier van elke gecontroleerde dag) dat optelt in de all-in **afname**prijs. Er is geen bewijs gevonden dat het de contractuele teruglevercorrectie is, en de openbare API biedt geen enkel terugleverveld. De automatische afleiding is daarom bewust **niet** geïmplementeerd en de handmatige teruglevercorrectie is behouden.
+
 ## [0.1.5] - 2026-08-08
 
 ### Fixed
@@ -106,6 +137,7 @@ Initial release.
 - Diagnostics support with secrets redacted.
 - HACS compatibility (`hacs.json`) and documentation.
 
+[0.1.5]: https://github.com/Bennie-JC/ha-frank-quarter-prices/releases/tag/v0.1.5
 [0.1.4]: https://github.com/Bennie-JC/ha-frank-quarter-prices/releases/tag/v0.1.4
 [0.1.3]: https://github.com/Bennie-JC/ha-frank-quarter-prices/releases/tag/v0.1.3
 [0.1.2]: https://github.com/Bennie-JC/ha-frank-quarter-prices/releases/tag/v0.1.2

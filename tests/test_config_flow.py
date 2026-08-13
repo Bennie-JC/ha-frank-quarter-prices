@@ -1,4 +1,4 @@
-"""Tests for the config flow and the feed-in-adjustment options flow."""
+"""Tests for the config flow and the feed-in / price-zone options flow."""
 
 from __future__ import annotations
 
@@ -7,11 +7,20 @@ from homeassistant.data_entry_flow import FlowResultType, InvalidData
 
 from custom_components.frank_quarter_prices.const import (
     CONF_APPLY_FEED_IN_VAT,
+    CONF_CHEAP_ZONE_MARGIN_PERCENT,
+    CONF_EXPENSIVE_ZONE_MARGIN_PERCENT,
     CONF_FEED_IN_ADJUSTMENT,
+    DEFAULT_ZONE_MARGIN_PERCENT,
     DOMAIN,
 )
 
 RETURN_PRICE = "sensor.frank_current_return_price"
+CHEAP_START = "sensor.frank_cheap_zone_start_today"
+EXPENSIVE_START = "sensor.frank_expensive_zone_start_today"
+
+# Legacy option key that never existed; stands in for any stale key an older
+# install may still carry in ``.storage``.
+LEGACY_KEY = "return_price_correction"
 
 
 async def _open_options(hass, entry):
@@ -95,12 +104,21 @@ async def test_options_default_when_absent(hass, setup_integration):
     assert float(hass.states.get(RETURN_PRICE).state) == pytest.approx(0.08)
 
 
-async def test_options_flow_shows_vat_checkbox(hass, setup_integration):
-    """The VAT checkbox appears directly below the feed-in adjustment field."""
+async def test_options_flow_field_order(hass, setup_integration):
+    """The options form shows exactly the four supported settings, in order.
+
+    v0.1.6 appends the two price-zone margins; the VAT checkbox still sits
+    directly below the feed-in adjustment, and nothing was dropped.
+    """
     entry, _ = setup_integration
     result = await _open_options(hass, entry)
     ordered_keys = [str(marker.schema) for marker in result["data_schema"].schema]
-    assert ordered_keys == [CONF_FEED_IN_ADJUSTMENT, CONF_APPLY_FEED_IN_VAT]
+    assert ordered_keys == [
+        CONF_FEED_IN_ADJUSTMENT,
+        CONF_APPLY_FEED_IN_VAT,
+        CONF_CHEAP_ZONE_MARGIN_PERCENT,
+        CONF_EXPENSIVE_ZONE_MARGIN_PERCENT,
+    ]
 
 
 async def test_options_flow_vat_defaults_disabled(hass, setup_integration):
@@ -143,3 +161,195 @@ async def test_options_flow_vat_save_false(hass, setup_integration):
     )
     assert result["type"] == FlowResultType.CREATE_ENTRY
     assert entry.options[CONF_APPLY_FEED_IN_VAT] is False
+
+
+# --- Price-zone margin options (v0.1.6) ------------------------------------
+
+
+async def test_config_flow_does_not_ask_for_zone_margins(hass):
+    """Initial setup stays a single country question; margins use defaults."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": "user"}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"country": "BE"}
+    )
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert CONF_CHEAP_ZONE_MARGIN_PERCENT not in result["data"]
+    assert CONF_EXPENSIVE_ZONE_MARGIN_PERCENT not in result["data"]
+
+
+async def test_fresh_setup_gets_default_margins(hass, setup_integration):
+    """A fresh entry without stored margins publishes 15% on both zones."""
+    entry, _ = setup_integration
+    assert CONF_CHEAP_ZONE_MARGIN_PERCENT not in entry.options
+    assert CONF_EXPENSIVE_ZONE_MARGIN_PERCENT not in entry.options
+
+    for entity_id in (CHEAP_START, EXPENSIVE_START):
+        assert hass.states.get(entity_id).attributes["margin_percent"] == (
+            DEFAULT_ZONE_MARGIN_PERCENT
+        )
+
+
+async def test_options_form_prefills_margin_defaults(hass, setup_integration):
+    """An entry with no margins stored offers 15% as the form default."""
+    entry, _ = setup_integration
+    result = await _open_options(hass, entry)
+    defaults = {
+        str(marker.schema): marker.default()
+        for marker in result["data_schema"].schema
+        if marker.default is not None
+    }
+    assert defaults[CONF_CHEAP_ZONE_MARGIN_PERCENT] == DEFAULT_ZONE_MARGIN_PERCENT
+    assert defaults[CONF_EXPENSIVE_ZONE_MARGIN_PERCENT] == DEFAULT_ZONE_MARGIN_PERCENT
+
+
+async def test_options_flow_changes_cheap_margin_only(hass, setup_integration):
+    """Changing only the cheap margin leaves the expensive one at its default."""
+    entry, _ = setup_integration
+    result = await _open_options(hass, entry)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_CHEAP_ZONE_MARGIN_PERCENT: 25.0}
+    )
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert entry.options[CONF_CHEAP_ZONE_MARGIN_PERCENT] == 25.0
+    await hass.async_block_till_done()
+
+    assert hass.states.get(CHEAP_START).attributes["margin_percent"] == 25.0
+    assert hass.states.get(EXPENSIVE_START).attributes["margin_percent"] == (
+        DEFAULT_ZONE_MARGIN_PERCENT
+    )
+
+
+async def test_options_flow_changes_expensive_margin_only(hass, setup_integration):
+    """Changing only the expensive margin leaves the cheap one at its default."""
+    entry, _ = setup_integration
+    result = await _open_options(hass, entry)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_EXPENSIVE_ZONE_MARGIN_PERCENT: 5.0}
+    )
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    await hass.async_block_till_done()
+
+    assert hass.states.get(EXPENSIVE_START).attributes["margin_percent"] == 5.0
+    assert hass.states.get(CHEAP_START).attributes["margin_percent"] == (
+        DEFAULT_ZONE_MARGIN_PERCENT
+    )
+
+
+async def test_options_flow_changes_both_margins(hass, setup_integration):
+    """Both margins can be set independently in one save."""
+    entry, _ = setup_integration
+    result = await _open_options(hass, entry)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            CONF_CHEAP_ZONE_MARGIN_PERCENT: 20.0,
+            CONF_EXPENSIVE_ZONE_MARGIN_PERCENT: 10.0,
+        },
+    )
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    await hass.async_block_till_done()
+
+    assert hass.states.get(CHEAP_START).attributes["margin_percent"] == 20.0
+    assert hass.states.get(EXPENSIVE_START).attributes["margin_percent"] == 10.0
+
+
+@pytest.mark.parametrize("value", [0.0, 1.0, 5.0, 15.0, 25.0, 49.0])
+async def test_options_flow_boundary_margins_accepted(hass, setup_integration, value):
+    """The documented range boundaries and the default are all accepted."""
+    entry, _ = setup_integration
+    result = await _open_options(hass, entry)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            CONF_CHEAP_ZONE_MARGIN_PERCENT: value,
+            CONF_EXPENSIVE_ZONE_MARGIN_PERCENT: value,
+        },
+    )
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert entry.options[CONF_CHEAP_ZONE_MARGIN_PERCENT] == value
+    assert entry.options[CONF_EXPENSIVE_ZONE_MARGIN_PERCENT] == value
+
+
+@pytest.mark.parametrize("value", [-1.0, 50.0, 99.0, 100.0, 1000.0])
+async def test_options_flow_out_of_range_margins_rejected(
+    hass, setup_integration, value
+):
+    """Margins outside 0–100% are rejected by the selector."""
+    entry, _ = setup_integration
+    result = await _open_options(hass, entry)
+    with pytest.raises(InvalidData):
+        await hass.config_entries.options.async_configure(
+            result["flow_id"], {CONF_CHEAP_ZONE_MARGIN_PERCENT: value}
+        )
+    with pytest.raises(InvalidData):
+        await hass.config_entries.options.async_configure(
+            result["flow_id"], {CONF_EXPENSIVE_ZONE_MARGIN_PERCENT: value}
+        )
+
+
+async def test_legacy_option_key_does_not_break_setup(hass, mock_client):
+    """A stale unknown option key from an older install is ignored, not fatal."""
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Frank Quarter Prices (NL)",
+        data={"country": "NL"},
+        options={LEGACY_KEY: -0.017, CONF_FEED_IN_ADJUSTMENT: 0.0},
+        unique_id="NL",
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    # The unknown key survives untouched (no risky migration) and the zone
+    # entities come up on their defaults regardless.
+    assert entry.options[LEGACY_KEY] == -0.017
+    assert hass.states.get(CHEAP_START).attributes["margin_percent"] == (
+        DEFAULT_ZONE_MARGIN_PERCENT
+    )
+
+
+async def test_legacy_option_key_is_not_offered_in_the_ui(hass, mock_client):
+    """A stale unknown option key is never rendered as a form field."""
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Frank Quarter Prices (NL)",
+        data={"country": "NL"},
+        options={LEGACY_KEY: -0.017},
+        unique_id="NL",
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    result = await _open_options(hass, entry)
+    assert LEGACY_KEY not in [
+        str(marker.schema) for marker in result["data_schema"].schema
+    ]
+
+
+async def test_out_of_range_stored_margin_is_clamped(hass, mock_client):
+    """A hand-edited out-of-range margin is clamped, never applied verbatim."""
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Frank Quarter Prices (NL)",
+        data={"country": "NL"},
+        options={
+            CONF_CHEAP_ZONE_MARGIN_PERCENT: 400.0,
+            CONF_EXPENSIVE_ZONE_MARGIN_PERCENT: -100.0,
+        },
+        unique_id="NL",
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert hass.states.get(CHEAP_START).attributes["margin_percent"] == 49.0
+    assert hass.states.get(EXPENSIVE_START).attributes["margin_percent"] == 0.0

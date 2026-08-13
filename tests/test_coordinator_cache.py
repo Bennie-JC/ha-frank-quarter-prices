@@ -739,7 +739,19 @@ async def test_partial_tomorrow_is_not_treated_as_complete(hass, entry, api):
         freezer.stop()
 
 
-# --- L/M/N. Local-day completeness, including both DST transitions ---------
+# --- L/M/N. Market-day completeness, including both DST transitions --------
+#
+# ``_covers_full_market_day`` became an instance method in v0.1.6: completeness
+# is measured against the *market's* midnights, so the validator needs to know
+# which market it is validating. It still takes no Home Assistant state, so a
+# bare instance is enough to exercise it.
+
+
+def covers_full_day(blocks, day, country: str = "NL") -> bool:
+    """Run the coordinator's market-day validator without a full setup."""
+    validator = FrankQuarterPricesCoordinator.__new__(FrankQuarterPricesCoordinator)
+    validator.country = country
+    return validator._covers_full_market_day(blocks, day)
 
 
 @pytest.mark.parametrize(
@@ -750,37 +762,31 @@ async def test_partial_tomorrow_is_not_treated_as_complete(hass, entry, api):
         (FALL_BACK, 100),  # N. 25-hour day
     ],
 )
-async def test_complete_local_day_validates(hass, day, expected_blocks):
-    """Completeness follows the real local-day span, not a fixed block count."""
+async def test_complete_market_day_validates(hass, day, expected_blocks):
+    """Completeness follows the real market-day span, not a fixed block count."""
     blocks = build_local_day_blocks(day)
 
     assert len(blocks) == expected_blocks
-    assert FrankQuarterPricesCoordinator._covers_full_local_day(blocks, day) is True
+    assert covers_full_day(blocks, day) is True
 
 
 @pytest.mark.parametrize("day", [date(2026, 8, 6), SPRING_FORWARD, FALL_BACK])
-async def test_incomplete_local_day_is_rejected(hass, day):
+async def test_incomplete_market_day_is_rejected(hass, day):
     """Missing, gapped and duplicated blocks all fail validation."""
     blocks = build_local_day_blocks(day)
 
-    assert FrankQuarterPricesCoordinator._covers_full_local_day([], day) is False
+    assert covers_full_day([], day) is False
     # Truncated at the end.
-    assert (
-        FrankQuarterPricesCoordinator._covers_full_local_day(blocks[:-1], day) is False
-    )
+    assert covers_full_day(blocks[:-1], day) is False
     # Missing the start of the day.
-    assert (
-        FrankQuarterPricesCoordinator._covers_full_local_day(blocks[1:], day) is False
-    )
+    assert covers_full_day(blocks[1:], day) is False
     # A hole in the middle.
     gapped = blocks[:10] + blocks[11:]
-    assert FrankQuarterPricesCoordinator._covers_full_local_day(gapped, day) is False
+    assert covers_full_day(gapped, day) is False
     # Right count, but one block duplicated in place of another.
     duplicated = blocks[:10] + [blocks[9]] + blocks[11:]
     assert len(duplicated) == len(blocks)
-    assert (
-        FrankQuarterPricesCoordinator._covers_full_local_day(duplicated, day) is False
-    )
+    assert covers_full_day(duplicated, day) is False
 
 
 async def test_hourly_fallback_day_validates(hass):
@@ -789,7 +795,7 @@ async def test_hourly_fallback_day_validates(hass):
     blocks = build_local_day_blocks(day, resolution_minutes=60)
 
     assert len(blocks) == 24
-    assert FrankQuarterPricesCoordinator._covers_full_local_day(blocks, day) is True
+    assert covers_full_day(blocks, day) is True
 
 
 async def test_dst_day_is_cached_and_not_refetched(hass, entry, api):
@@ -849,3 +855,98 @@ async def test_two_day_run_needs_no_extra_today_fetch(hass, entry, api):
         assert len(api.calls) == 3
     finally:
         freezer.stop()
+
+
+# --- Documented block counts, at both resolutions ---------------------------
+
+
+@pytest.mark.parametrize(
+    ("resolution_minutes", "day", "expected_blocks"),
+    [
+        # Quarter-hour data: the resolution the integration requests.
+        (15, SPRING_FORWARD, 92),
+        (15, date(2026, 8, 6), 96),
+        (15, FALL_BACK, 100),
+        # Hourly fallback, for a day Frank has no quarter-hour data for.
+        (60, SPRING_FORWARD, 23),
+        (60, date(2026, 8, 6), 24),
+        (60, FALL_BACK, 25),
+    ],
+)
+async def test_documented_block_counts_are_complete_days(
+    hass, resolution_minutes, day, expected_blocks
+):
+    """Pin the block counts both READMEs quote, at both resolutions.
+
+    "96 blocks a day" is only true on an ordinary day. The documentation states
+    92/96/100 for quarter-hour data and 23/24/25 for the hourly fallback, and a
+    reader should be able to trust that those are the real numbers rather than a
+    plausible-looking guess. Each one is asserted to be exactly what a complete
+    market day contains.
+    """
+    blocks = build_local_day_blocks(day, resolution_minutes=resolution_minutes)
+
+    assert len(blocks) == expected_blocks
+    assert covers_full_day(blocks, day) is True
+
+
+@pytest.mark.parametrize("resolution_minutes", [15, 60])
+async def test_one_block_short_is_never_a_complete_day(hass, resolution_minutes):
+    """The counts above are exact: one block fewer is not the day."""
+    for day in (SPRING_FORWARD, date(2026, 8, 6), FALL_BACK):
+        blocks = build_local_day_blocks(day, resolution_minutes=resolution_minutes)
+        assert covers_full_day(blocks[:-1], day) is False, (day, resolution_minutes)
+
+
+# --- The repeated hour of the fall-back day ---------------------------------
+
+
+async def test_current_block_distinguishes_the_two_passes_of_the_repeated_hour(hass):
+    """02:00 CEST and 02:00 CET are different quarters with different prices.
+
+    Comparing the aware datetimes directly is a naive wall-clock comparison
+    whenever both share one ``tzinfo`` object -- which they always do, because
+    ``ZoneInfo`` is cached per key. Both passes of the repeated hour then look
+    identical and the first-pass block is returned for the whole second hour,
+    so ``sensor.frank_current_price`` would publish the previous hour's price
+    for an hour, once a year.
+    """
+    market_tz = dt_util.get_time_zone(TEST_TIMEZONE)
+    blocks = [
+        build_block_span(block["from"], block["till"], round(0.05 + index * 0.001, 6))
+        for index, block in enumerate(build_local_day_blocks(FALL_BACK))
+    ]
+    assert len(blocks) == 100
+
+    def block_at(moment):
+        return FrankQuarterPricesCoordinator._determine_current_block(blocks, moment)
+
+    first_pass = datetime(2026, 10, 25, 2, 7, tzinfo=market_tz, fold=0)
+    second_pass = datetime(2026, 10, 25, 2, 7, tzinfo=market_tz, fold=1)
+
+    early = block_at(first_pass)
+    late = block_at(second_pass)
+
+    assert early is not None and late is not None
+    # An hour of real time apart, so a different quarter and a different price.
+    assert early is not late
+    assert early["total_price_eur_kwh"] != late["total_price_eur_kwh"]
+    # And each really does contain its own instant, measured in UTC.
+    for block, moment in ((early, first_pass), (late, second_pass)):
+        assert (
+            dt_util.as_utc(block["from"])
+            <= dt_util.as_utc(moment)
+            < dt_util.as_utc(block["till"])
+        )
+
+
+async def test_current_block_is_correct_at_every_quarter_of_the_fall_back_day(hass):
+    """Walk all 100 quarters: each one selects itself, none is skipped."""
+    blocks = build_local_day_blocks(FALL_BACK)
+
+    for block in blocks:
+        midpoint = dt_util.as_utc(block["from"]) + timedelta(minutes=7)
+        selected = FrankQuarterPricesCoordinator._determine_current_block(
+            blocks, midpoint
+        )
+        assert selected is block, dt_util.as_local(block["from"]).isoformat()

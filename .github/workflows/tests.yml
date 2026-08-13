@@ -1,0 +1,35 @@
+name: Tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  pytest:
+    name: pytest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Home Assistant 2026.2 (pulled in by the pinned
+      # pytest-homeassistant-custom-component) requires Python 3.13.2 or newer.
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements-test.txt
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-test.txt
+
+      # pytest.ini supplies testpaths, pythonpath and asyncio_mode, so the bare
+      # command is the whole configuration.
+      - name: Run pytest
+        run: python -m pytest

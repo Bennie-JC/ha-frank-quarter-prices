@@ -1,11 +1,17 @@
 """Backward-compatibility guard for the public entity contract.
 
-Everything below is the contract as released in v0.1.4. Dashboards,
-automations, templates and external EMS consumers are written against exactly
-these entity ids, unique ids, names, units and attribute keys, so an internal
-refactor — the issue #3 caching rework, or anything after it — must leave every
-one of them untouched. A sensor that disappears, gets renamed, changes unit or
-grows/loses a public attribute fails here.
+:data:`BASELINE` is the contract as released in v0.1.4 and unchanged since.
+Dashboards, automations, templates and external EMS consumers are written
+against exactly these entity ids, unique ids, names, units and attribute keys,
+so an internal refactor — the issue #3 caching rework, the v0.1.6 price zones,
+or anything after them — must leave every one of them untouched. A sensor that
+disappears, gets renamed, changes unit or grows/loses a public attribute fails
+here.
+
+:data:`ADDED_IN_0_1_6` holds the six price-zone entities added in v0.1.6. They
+are kept in a separate table purely so the frozen part of the contract stays
+visibly frozen; both tables are held to the same assertions, and the union is
+what the integration must create — no more, no less.
 """
 
 from __future__ import annotations
@@ -226,6 +232,88 @@ BASELINE: dict[str, dict[str, Any]] = {
     },
 }
 
+# Attribute keys shared by all four price-zone boundary sensors. One shared
+# contract, so a template reading only the start sensor still has the threshold
+# and margin it needs to render the zone.
+_ZONE_SENSOR_ATTRS = {
+    "time",
+    "zone_start",
+    "zone_end",
+    "margin_percent",
+    "threshold_eur_kwh",
+    "day_min_price",
+    "day_max_price",
+    "zone_duration_minutes",
+    "quarter_count",
+}
+
+# Attribute keys shared by both price-zone period binary sensors.
+_ZONE_PERIOD_ATTRS = {
+    "zone_start",
+    "zone_end",
+    "threshold_eur_kwh",
+    "margin_percent",
+}
+
+
+def _zone_sensor(suffix: str, name: str, icon: str) -> dict[str, Any]:
+    """Return the expected contract for one zone-boundary sensor."""
+    return {
+        "unique_id_suffix": suffix,
+        "name": name,
+        "unit": None,
+        "device_class": "timestamp",
+        "state_class": None,
+        "icon": icon,
+        "entity_category": None,
+        "attrs": _ZONE_SENSOR_ATTRS,
+        "state_type": str,
+    }
+
+
+# The six entities added in v0.1.6. Purely additive: nothing in BASELINE moves.
+ADDED_IN_0_1_6: dict[str, dict[str, Any]] = {
+    "sensor.frank_cheap_zone_start_today": _zone_sensor(
+        "cheap_zone_start_today", "Frank Cheap zone start today", "mdi:clock-start"
+    ),
+    "sensor.frank_cheap_zone_end_today": _zone_sensor(
+        "cheap_zone_end_today", "Frank Cheap zone end today", "mdi:clock-end"
+    ),
+    "sensor.frank_expensive_zone_start_today": _zone_sensor(
+        "expensive_zone_start_today",
+        "Frank Expensive zone start today",
+        "mdi:clock-start",
+    ),
+    "sensor.frank_expensive_zone_end_today": _zone_sensor(
+        "expensive_zone_end_today", "Frank Expensive zone end today", "mdi:clock-end"
+    ),
+    "binary_sensor.frank_cheap_period": {
+        "unique_id_suffix": "cheap_period",
+        "name": "Frank Cheap period",
+        "unit": None,
+        "device_class": None,
+        "state_class": None,
+        "icon": "mdi:trending-down",
+        "entity_category": None,
+        "attrs": _ZONE_PERIOD_ATTRS,
+        "state_type": str,
+    },
+    "binary_sensor.frank_expensive_period": {
+        "unique_id_suffix": "expensive_period",
+        "name": "Frank Expensive period",
+        "unit": None,
+        "device_class": None,
+        "state_class": None,
+        "icon": "mdi:trending-up",
+        "entity_category": None,
+        "attrs": _ZONE_PERIOD_ATTRS,
+        "state_type": str,
+    },
+}
+
+# The complete v0.1.6 entity contract.
+CONTRACT: dict[str, dict[str, Any]] = BASELINE | ADDED_IN_0_1_6
+
 # Keys of a single price block, in the order the client produces them. External
 # consumers index these directly out of the ``prices`` array.
 PRICE_BLOCK_KEYS = [
@@ -247,20 +335,33 @@ def _integration_attrs(state) -> set[str]:
 
 
 def test_no_entity_is_missing_or_extra(hass):
-    """The integration creates exactly the v0.1.4 set of entities."""
+    """The integration creates exactly the v0.1.6 set of entities."""
     registry = er.async_get(hass)
     created = {
         entity.entity_id
         for entity in registry.entities.values()
         if entity.platform == DOMAIN
     }
-    assert created == set(BASELINE)
+    assert created == set(CONTRACT)
 
 
-@pytest.mark.parametrize("entity_id", sorted(BASELINE))
+def test_v0_1_4_entities_all_still_exist(hass):
+    """Not one pre-v0.1.6 entity was renamed, dropped or replaced."""
+    registry = er.async_get(hass)
+    created = {
+        entity.entity_id
+        for entity in registry.entities.values()
+        if entity.platform == DOMAIN
+    }
+    assert set(BASELINE) <= created
+    # The v0.1.6 additions really are additions, not renames of old entities.
+    assert set(BASELINE).isdisjoint(ADDED_IN_0_1_6)
+
+
+@pytest.mark.parametrize("entity_id", sorted(CONTRACT))
 def test_entity_registry_metadata_unchanged(hass, entity_id):
     """Unique id, name, unit, categories and enabled-default are unchanged."""
-    expected = BASELINE[entity_id]
+    expected = CONTRACT[entity_id]
     registry = er.async_get(hass)
     entry = registry.async_get(entity_id)
 
@@ -279,10 +380,10 @@ def test_entity_registry_metadata_unchanged(hass, entity_id):
     assert entry.original_icon == expected["icon"]
 
 
-@pytest.mark.parametrize("entity_id", sorted(BASELINE))
+@pytest.mark.parametrize("entity_id", sorted(CONTRACT))
 def test_entity_state_contract_unchanged(hass, entity_id):
     """Friendly name, state type and the exact attribute keys are unchanged."""
-    expected = BASELINE[entity_id]
+    expected = CONTRACT[entity_id]
     state = hass.states.get(entity_id)
 
     assert state is not None, f"{entity_id} has no state"
@@ -303,7 +404,7 @@ def test_all_entities_share_one_service_device(hass):
     device_registry = dr.async_get(hass)
 
     device_ids = {
-        entity_registry.async_get(entity_id).device_id for entity_id in BASELINE
+        entity_registry.async_get(entity_id).device_id for entity_id in CONTRACT
     }
     assert len(device_ids) == 1
 
