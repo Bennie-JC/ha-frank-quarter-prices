@@ -10,6 +10,11 @@ from custom_components.frank_quarter_prices.const import (
     CONF_CHEAP_ZONE_MARGIN_PERCENT,
     CONF_EXPENSIVE_ZONE_MARGIN_PERCENT,
     CONF_FEED_IN_ADJUSTMENT,
+    CONF_OPTIMAL_CHEAP_DURATION_MINUTES,
+    CONF_OPTIMAL_CHEAP_ENABLED,
+    CONF_OPTIMAL_EXPENSIVE_DURATION_MINUTES,
+    CONF_OPTIMAL_EXPENSIVE_ENABLED,
+    DEFAULT_OPTIMAL_DURATION_MINUTES,
     DEFAULT_ZONE_MARGIN_PERCENT,
     DOMAIN,
 )
@@ -105,10 +110,13 @@ async def test_options_default_when_absent(hass, setup_integration):
 
 
 async def test_options_flow_field_order(hass, setup_integration):
-    """The options form shows exactly the four supported settings, in order.
+    """The options form shows exactly the supported settings, in order.
 
-    v0.1.6 appends the two price-zone margins; the VAT checkbox still sits
-    directly below the feed-in adjustment, and nothing was dropped.
+    The form is flat but reads as three groups, top to bottom: the feed-in
+    settings, the two price-zone margins, then the two optional optimal
+    periods, each toggle immediately followed by its own duration. v0.1.6's
+    four fields keep their original positions — the VAT checkbox still sits
+    directly below the feed-in adjustment — and nothing was dropped.
     """
     entry, _ = setup_integration
     result = await _open_options(hass, entry)
@@ -118,6 +126,10 @@ async def test_options_flow_field_order(hass, setup_integration):
         CONF_APPLY_FEED_IN_VAT,
         CONF_CHEAP_ZONE_MARGIN_PERCENT,
         CONF_EXPENSIVE_ZONE_MARGIN_PERCENT,
+        CONF_OPTIMAL_CHEAP_ENABLED,
+        CONF_OPTIMAL_CHEAP_DURATION_MINUTES,
+        CONF_OPTIMAL_EXPENSIVE_ENABLED,
+        CONF_OPTIMAL_EXPENSIVE_DURATION_MINUTES,
     ]
 
 
@@ -331,6 +343,195 @@ async def test_legacy_option_key_is_not_offered_in_the_ui(hass, mock_client):
     assert LEGACY_KEY not in [
         str(marker.schema) for marker in result["data_schema"].schema
     ]
+
+
+# --- Optimal-period options -------------------------------------------------
+
+
+async def test_optimal_periods_are_off_by_default(hass, setup_integration):
+    """A fresh entry gets neither planner feature, and neither is stored."""
+    entry, _ = setup_integration
+    assert CONF_OPTIMAL_CHEAP_ENABLED not in entry.options
+    assert CONF_OPTIMAL_EXPENSIVE_ENABLED not in entry.options
+
+    result = await _open_options(hass, entry)
+    defaults = {
+        str(marker.schema): marker.default()
+        for marker in result["data_schema"].schema
+        if marker.default is not None
+    }
+    assert defaults[CONF_OPTIMAL_CHEAP_ENABLED] is False
+    assert defaults[CONF_OPTIMAL_EXPENSIVE_ENABLED] is False
+    # The duration is pre-filled even while the feature is off, so enabling it
+    # is a single click rather than a click plus a number.
+    assert defaults[CONF_OPTIMAL_CHEAP_DURATION_MINUTES] == (
+        DEFAULT_OPTIMAL_DURATION_MINUTES
+    )
+    assert defaults[CONF_OPTIMAL_EXPENSIVE_DURATION_MINUTES] == (
+        DEFAULT_OPTIMAL_DURATION_MINUTES
+    )
+
+
+async def test_config_flow_does_not_ask_for_optimal_periods(hass):
+    """Initial setup stays a single country question."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": "user"}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"country": "NL"}
+    )
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert CONF_OPTIMAL_CHEAP_ENABLED not in result["data"]
+    assert CONF_OPTIMAL_EXPENSIVE_ENABLED not in result["data"]
+
+
+@pytest.mark.parametrize("value", [15, 30, 45, 60, 90, 120, 180, 240, 360, 480, 720])
+async def test_optimal_duration_boundaries_accepted(hass, setup_integration, value):
+    """Every documented duration, both boundaries included, is accepted."""
+    entry, _ = setup_integration
+    result = await _open_options(hass, entry)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            CONF_OPTIMAL_CHEAP_ENABLED: True,
+            CONF_OPTIMAL_CHEAP_DURATION_MINUTES: value,
+            CONF_OPTIMAL_EXPENSIVE_ENABLED: True,
+            CONF_OPTIMAL_EXPENSIVE_DURATION_MINUTES: value,
+        },
+    )
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert entry.options[CONF_OPTIMAL_CHEAP_DURATION_MINUTES] == value
+    assert entry.options[CONF_OPTIMAL_EXPENSIVE_DURATION_MINUTES] == value
+
+
+@pytest.mark.parametrize("value", [0, 5, 10, 14, 721, 1000, 1440, -15, "abc"])
+async def test_optimal_duration_out_of_range_rejected(hass, setup_integration, value):
+    """Durations outside 15-720 minutes are rejected by the selector itself."""
+    entry, _ = setup_integration
+    result = await _open_options(hass, entry)
+    with pytest.raises(InvalidData):
+        await hass.config_entries.options.async_configure(
+            result["flow_id"], {CONF_OPTIMAL_CHEAP_DURATION_MINUTES: value}
+        )
+    with pytest.raises(InvalidData):
+        await hass.config_entries.options.async_configure(
+            result["flow_id"], {CONF_OPTIMAL_EXPENSIVE_DURATION_MINUTES: value}
+        )
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [
+        (CONF_OPTIMAL_CHEAP_DURATION_MINUTES, 17),
+        (CONF_OPTIMAL_CHEAP_DURATION_MINUTES, 22.5),
+        (CONF_OPTIMAL_CHEAP_DURATION_MINUTES, 100),
+        (CONF_OPTIMAL_EXPENSIVE_DURATION_MINUTES, 17),
+        (CONF_OPTIMAL_EXPENSIVE_DURATION_MINUTES, 22.5),
+        (CONF_OPTIMAL_EXPENSIVE_DURATION_MINUTES, 100),
+    ],
+)
+async def test_off_step_duration_is_rejected_with_an_error(
+    hass, setup_integration, key, value
+):
+    """A duration inside the range but off the 15-minute step is refused.
+
+    The number selector checks the range and the type but *not* the step, so a
+    submission that bypasses the frontend box would otherwise store a 17 that
+    leaves the planner permanently unavailable for an invisible reason. The
+    flow re-shows the form with a field error instead of storing it.
+    """
+    entry, _ = setup_integration
+    result = await _open_options(hass, entry)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {key: value}
+    )
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "init"
+    assert result["errors"] == {key: "invalid_duration"}
+    assert key not in entry.options
+
+
+async def test_a_rejected_duration_keeps_the_other_edits_in_the_form(
+    hass, setup_integration
+):
+    """Correcting one bad field must not mean retyping the whole form."""
+    entry, _ = setup_integration
+    result = await _open_options(hass, entry)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            CONF_FEED_IN_ADJUSTMENT: 0.02,
+            CONF_CHEAP_ZONE_MARGIN_PERCENT: 25.0,
+            CONF_OPTIMAL_CHEAP_ENABLED: True,
+            CONF_OPTIMAL_CHEAP_DURATION_MINUTES: 17,
+        },
+    )
+    assert result["type"] == FlowResultType.FORM
+
+    suggested = {
+        str(marker.schema): marker.description["suggested_value"]
+        for marker in result["data_schema"].schema
+        if marker.description and "suggested_value" in marker.description
+    }
+    assert suggested[CONF_FEED_IN_ADJUSTMENT] == 0.02
+    assert suggested[CONF_CHEAP_ZONE_MARGIN_PERCENT] == 25.0
+    assert suggested[CONF_OPTIMAL_CHEAP_ENABLED] is True
+
+    # Nothing was stored while the form was still invalid.
+    assert CONF_FEED_IN_ADJUSTMENT not in entry.options
+
+
+async def test_correcting_the_duration_then_saves_everything(hass, setup_integration):
+    """After fixing the field, a resubmission stores the whole form."""
+    entry, _ = setup_integration
+    result = await _open_options(hass, entry)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {CONF_OPTIMAL_CHEAP_ENABLED: True, CONF_OPTIMAL_CHEAP_DURATION_MINUTES: 17},
+    )
+    assert result["type"] == FlowResultType.FORM
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {CONF_OPTIMAL_CHEAP_ENABLED: True, CONF_OPTIMAL_CHEAP_DURATION_MINUTES: 180},
+    )
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert entry.options[CONF_OPTIMAL_CHEAP_DURATION_MINUTES] == 180
+    await hass.async_block_till_done()
+    assert (
+        hass.states.get("sensor.frank_optimal_cheap_period_today").attributes[
+            "duration_minutes"
+        ]
+        == 180
+    )
+
+
+async def test_optimal_options_survive_a_margin_change(hass, setup_integration):
+    """Retuning a zone margin does not silently reset the planner settings."""
+    entry, _ = setup_integration
+    hass.config_entries.async_update_entry(
+        entry,
+        options={
+            CONF_OPTIMAL_CHEAP_ENABLED: True,
+            CONF_OPTIMAL_CHEAP_DURATION_MINUTES: 180,
+        },
+    )
+    await hass.async_block_till_done()
+
+    result = await _open_options(hass, entry)
+    submitted = {
+        str(marker.schema): marker.default()
+        for marker in result["data_schema"].schema
+        if marker.default is not None
+    }
+    submitted[CONF_CHEAP_ZONE_MARGIN_PERCENT] = 25.0
+    await hass.config_entries.options.async_configure(result["flow_id"], submitted)
+    await hass.async_block_till_done()
+
+    assert entry.options[CONF_CHEAP_ZONE_MARGIN_PERCENT] == 25.0
+    assert entry.options[CONF_OPTIMAL_CHEAP_ENABLED] is True
+    assert entry.options[CONF_OPTIMAL_CHEAP_DURATION_MINUTES] == 180
 
 
 async def test_out_of_range_stored_margin_is_clamped(hass, mock_client):

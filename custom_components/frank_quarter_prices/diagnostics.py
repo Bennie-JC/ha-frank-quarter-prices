@@ -9,6 +9,12 @@ from homeassistant.core import HomeAssistant
 
 from .const import CONF_COUNTRY, DEFAULT_COUNTRY
 from .market_time import market_timezone
+from .optimal_period import (
+    get_optimal_cheap_duration_minutes,
+    get_optimal_cheap_enabled,
+    get_optimal_expensive_duration_minutes,
+    get_optimal_expensive_enabled,
+)
 from .price import MARKET_PRICE_FIELD, get_apply_feed_in_vat, get_feed_in_adjustment
 from .price_zone import (
     get_cheap_zone_margin_percent,
@@ -70,6 +76,25 @@ async def async_get_config_entry_diagnostics(
             "cheap_margin_percent": get_cheap_zone_margin_percent(entry.options),
             "expensive_margin_percent": get_expensive_zone_margin_percent(
                 entry.options
+            ),
+            # The optimal-period settings as they are actually in force. The
+            # derived periods themselves already travel inside
+            # ``coordinator.data``, so only the resolved settings are added
+            # here — enough to explain an unavailable planner entity without
+            # dumping a second copy of the daily price array.
+            #
+            # A duration of ``null`` means the stored value is not a usable
+            # duration and the planner is deliberately not running. The raw
+            # stored value is not repeated here because ``entry.options`` above
+            # already carries it verbatim, which is exactly what a bug report
+            # needs to see next to this.
+            "optimal_cheap_enabled": get_optimal_cheap_enabled(entry.options),
+            "optimal_cheap_duration_minutes": get_optimal_cheap_duration_minutes(
+                entry.options
+            ),
+            "optimal_expensive_enabled": get_optimal_expensive_enabled(entry.options),
+            "optimal_expensive_duration_minutes": (
+                get_optimal_expensive_duration_minutes(entry.options)
             ),
             "return_price_source": MARKET_PRICE_FIELD,
             "return_price_apply_vat": get_apply_feed_in_vat(entry.options),

@@ -21,15 +21,26 @@
           "feed_in_adjustment": "Teruglevercorrectie",
           "apply_feed_in_vat": "21% btw toepassen op terugleverprijs",
           "cheap_zone_margin_percent": "Marge goedkope prijszone",
-          "expensive_zone_margin_percent": "Marge dure prijszone"
+          "expensive_zone_margin_percent": "Marge dure prijszone",
+          "optimal_cheap_enabled": "Optimale goedkope periode inschakelen",
+          "optimal_cheap_duration_minutes": "Duur optimale goedkope periode",
+          "optimal_expensive_enabled": "Optimale dure periode inschakelen",
+          "optimal_expensive_duration_minutes": "Duur optimale dure periode"
         },
         "data_description": {
           "feed_in_adjustment": "Het bedrag in EUR/kWh dat bij de geverifieerde actuele marktprijs wordt opgeteld om de geschatte terugleverprijs te berekenen. Gebruik een positieve waarde voor een extra vergoeding, een negatieve waarde voor een inhouding en nul om de marktprijs ongewijzigd te gebruiken. Contractvoorwaarden kunnen verschillen.",
           "apply_feed_in_vat": "Schakel dit in wanneer de terugleververgoeding inclusief 21% btw moet worden berekend. De btw wordt toegepast op de marktprijs plus de ingestelde teruglevercorrectie. Laat dit uitgeschakeld wanneer jouw vergoeding exclusief btw wordt berekend. Controleer dit in je eigen Frank Energie-contract of afrekening.",
           "cheap_zone_margin_percent": "Het percentage van het totale prijsverschil van de dag, gerekend vanaf het goedkoopste kwartier, dat nog als goedkoop wordt beschouwd. De langste aaneengesloten reeks kwartieren binnen die grens vormt de goedkope prijszone. Standaard 15%, maximaal 49%.",
-          "expensive_zone_margin_percent": "Het percentage van het totale prijsverschil van de dag, gerekend vanaf het duurste kwartier, dat nog als duur wordt beschouwd. De langste aaneengesloten reeks kwartieren binnen die grens vormt de dure prijszone. Standaard 15%, maximaal 49%."
+          "expensive_zone_margin_percent": "Het percentage van het totale prijsverschil van de dag, gerekend vanaf het duurste kwartier, dat nog als duur wordt beschouwd. De langste aaneengesloten reeks kwartieren binnen die grens vormt de dure prijszone. Standaard 15%, maximaal 49%.",
+          "optimal_cheap_enabled": "Zoekt de goedkoopste aaneengesloten periode van precies de hieronder ingestelde duur, voor vandaag en voor morgen. Dit staat volledig los van de goedkope prijszone: er wordt alleen gekeken naar de werkelijke prijzen en de gekozen duur, nooit naar de zonemarge. Zolang deze optie nooit is ingeschakeld, worden de bijbehorende entiteiten niet aangemaakt. Schakel je hem later weer uit, dan blijven eerder aangemaakte entiteiten bestaan als onbeschikbaar, zodat entity-ID's en aanpassingen behouden blijven.",
+          "optimal_cheap_duration_minutes": "De exacte lengte van de goedkoopste periode, in minuten. Van 15 tot 720 minuten in stappen van 15. Alleen van toepassing wanneer de optimale goedkope periode hierboven is ingeschakeld. De periode is altijd exact deze lengte en aaneengesloten; past de duur niet op de blokken van de dag (bijvoorbeeld 90 minuten op een dag met uurprijzen), dan blijft het resultaat onbeschikbaar in plaats van dat er blokken worden opgeknipt.",
+          "optimal_expensive_enabled": "Zoekt de duurste aaneengesloten periode van precies de hieronder ingestelde duur, voor vandaag en voor morgen. Handig om verbruik te vermijden of juist terug te leveren. Dit staat volledig los van de dure prijszone: er wordt alleen gekeken naar de werkelijke prijzen en de gekozen duur, nooit naar de zonemarge. Zolang deze optie nooit is ingeschakeld, worden de bijbehorende entiteiten niet aangemaakt. Schakel je hem later weer uit, dan blijven eerder aangemaakte entiteiten bestaan als onbeschikbaar, zodat entity-ID's en aanpassingen behouden blijven.",
+          "optimal_expensive_duration_minutes": "De exacte lengte van de duurste periode, in minuten. Van 15 tot 720 minuten in stappen van 15. Alleen van toepassing wanneer de optimale dure periode hierboven is ingeschakeld."
         }
       }
+    },
+    "error": {
+      "invalid_duration": "Vul een heel aantal minuten in tussen 15 en 720, in stappen van 15 (bijvoorbeeld 60, 120 of 180)."
     }
   }
 }

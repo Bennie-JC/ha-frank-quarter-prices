@@ -61,6 +61,48 @@ ZONE_MARGIN_PERCENT_STEP: Final = 1.0
 ZONE_MODE_CHEAP: Final = "cheap"
 ZONE_MODE_EXPENSIVE: Final = "expensive"
 
+# Optimal periods.
+#
+# A price *zone* answers "which contiguous part of the day falls inside my
+# cheap/expensive threshold?". An optimal *period* answers a different question:
+# "which exact X-minute contiguous window has the lowest (or highest) average
+# price?". The two are deliberately independent features — an optimal period is
+# derived from the actual prices and the requested duration alone and never
+# consults the zone margins above, just as changing a duration never moves a
+# zone boundary.
+#
+# Both are off by default so an installation upgrading from an earlier version
+# gains no entities it did not ask for.
+CONF_OPTIMAL_CHEAP_ENABLED: Final = "optimal_cheap_enabled"
+CONF_OPTIMAL_CHEAP_DURATION_MINUTES: Final = "optimal_cheap_duration_minutes"
+CONF_OPTIMAL_EXPENSIVE_ENABLED: Final = "optimal_expensive_enabled"
+CONF_OPTIMAL_EXPENSIVE_DURATION_MINUTES: Final = "optimal_expensive_duration_minutes"
+DEFAULT_OPTIMAL_ENABLED: Final = False
+
+# Accepted duration range, in minutes.
+#
+# The minimum is one native quarter-hour block: the finest window the data can
+# describe. The step matches it, so every value the selector offers is a whole
+# number of quarter-hour blocks.
+#
+# The maximum is 12 hours. It is a deliberate half-day ceiling rather than a
+# technical limit: beyond half a day the "cheapest contiguous window" converges
+# on "most of the day" and stops being an actionable planning answer, while 12
+# hours still covers the two cases this feature exists for — an overnight EV or
+# battery charge, and a whole-evening avoid window. It also stays comfortably
+# inside the 23-hour spring-forward day, so no configurable duration can become
+# structurally impossible on one day of the year.
+MIN_OPTIMAL_DURATION_MINUTES: Final = 15
+MAX_OPTIMAL_DURATION_MINUTES: Final = 720
+OPTIMAL_DURATION_STEP_MINUTES: Final = 15
+DEFAULT_OPTIMAL_DURATION_MINUTES: Final = 120
+
+# Modes accepted by ``optimal_period.calculate_optimal_period``.
+OPTIMAL_MODE_CHEAP: Final = "cheap"
+OPTIMAL_MODE_EXPENSIVE: Final = "expensive"
+
+MINUTES_UNIT: Final = "min"
+
 # Shared price unit for the monetary sensors.
 PRICE_UNIT_EUR_KWH: Final = "EUR/kWh"
 PERCENT_UNIT: Final = "%"

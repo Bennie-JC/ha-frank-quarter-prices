@@ -13,8 +13,15 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    CONF_OPTIMAL_CHEAP_DURATION_MINUTES,
+    CONF_OPTIMAL_EXPENSIVE_DURATION_MINUTES,
     DEFAULT_COUNTRY,
     DOMAIN,
+    MAX_OPTIMAL_DURATION_MINUTES,
+    MIN_OPTIMAL_DURATION_MINUTES,
+    OPTIMAL_DURATION_STEP_MINUTES,
+    OPTIMAL_MODE_CHEAP,
+    OPTIMAL_MODE_EXPENSIVE,
     QUARTER_BOUNDARY_MINUTES,
     QUARTER_TICK_OFFSET_SECONDS,
     TOMORROW_ERROR_BACKOFF_MINUTES,
@@ -22,6 +29,13 @@ from .const import (
 )
 from .frank_client import FrankClient, FrankClientAuthError, FrankClientError
 from .market_time import market_date_of, market_day_bounds, market_now
+from .optimal_period import (
+    calculate_optimal_period,
+    get_optimal_cheap_duration_minutes,
+    get_optimal_cheap_enabled,
+    get_optimal_expensive_duration_minutes,
+    get_optimal_expensive_enabled,
+)
 from .price_zone import (
     calculate_price_zones,
     get_cheap_zone_margin_percent,
@@ -44,6 +58,17 @@ def _zone_summary(zone: dict[str, Any] | None) -> str:
     return (
         f"{dt_util.as_local(zone['start']):%H:%M}-{dt_util.as_local(zone['end']):%H:%M}"
         f" (threshold {zone['threshold_eur_kwh']} @ {zone['margin_percent']}%)"
+    )
+
+
+def _period_summary(period: dict[str, Any] | None) -> str:
+    """Render an optimal period compactly for the debug log."""
+    if not period:
+        return "none"
+    return (
+        f"{dt_util.as_local(period['start']):%H:%M}"
+        f"-{dt_util.as_local(period['end']):%H:%M}"
+        f" ({period['duration_minutes']} min @ {period['average_price_eur_kwh']})"
     )
 
 
@@ -82,6 +107,9 @@ class FrankQuarterPricesCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # without delaying recovery from a single blip.
         self._tomorrow_errors = 0
         self._tomorrow_error_at: datetime | None = None
+        # Unusable optimal-period durations already reported. A list rather
+        # than a set because a stored value may be unhashable.
+        self._warned_durations: list[Any] = []
 
         super().__init__(
             hass,
@@ -187,15 +215,26 @@ class FrankQuarterPricesCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 len(today_prices),
             )
 
+        # Derive the enabled optimal periods once per update too, from the same
+        # already-fetched blocks. Each enabled period is calculated exactly once
+        # here — never once per entity — so the today/tomorrow sensors and the
+        # matching binary sensor always describe the identical window.
+        optimal = self._derive_optimal_periods(
+            today_prices, tomorrow_prices, today, tomorrow
+        )
+
         _LOGGER.debug(
             "Update: today=%d blocks, tomorrow=%d blocks (available=%s), "
-            "resolution=%d min, cheap_zone=%s, expensive_zone=%s",
+            "resolution=%d min, cheap_zone=%s, expensive_zone=%s, "
+            "optimal_cheap=%s, optimal_expensive=%s",
             len(today_prices),
             len(tomorrow_prices),
             tomorrow_available,
             resolution_minutes,
             _zone_summary(cheap_zone),
             _zone_summary(expensive_zone),
+            _period_summary(optimal["optimal_cheap_today"]),
+            _period_summary(optimal["optimal_expensive_today"]),
         )
 
         return {
@@ -207,9 +246,105 @@ class FrankQuarterPricesCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "resolution_minutes": resolution_minutes,
             "cheap_zone": cheap_zone,
             "expensive_zone": expensive_zone,
+            **optimal,
             "last_update": now,
             "last_attempt": now,
         }
+
+    # --- Optimal periods ---------------------------------------------------
+
+    def _warn_invalid_duration(self, conf_key: str, value: Any) -> None:
+        """Log an unusable configured duration, once per distinct value.
+
+        The coordinator updates every quarter, so logging unconditionally would
+        put the same warning in the log ~96 times a day. Warning once per
+        offending value still surfaces it, and a corrected value is reported
+        again if it is still wrong.
+        """
+        if value in self._warned_durations:
+            return
+        self._warned_durations.append(value)
+        _LOGGER.warning(
+            "Ignoring the configured %s value %r: a duration must be a whole "
+            "number of minutes between %d and %d in steps of %d. The matching "
+            "optimal-period entities stay unavailable until it is corrected "
+            "under Settings > Devices & Services > Frank Quarter Prices > "
+            "Configure",
+            conf_key,
+            value,
+            MIN_OPTIMAL_DURATION_MINUTES,
+            MAX_OPTIMAL_DURATION_MINUTES,
+            OPTIMAL_DURATION_STEP_MINUTES,
+        )
+
+    def _derive_optimal_periods(
+        self,
+        today_prices: list[dict[str, Any]],
+        tomorrow_prices: list[dict[str, Any]],
+        today: date_type,
+        tomorrow: date_type,
+    ) -> dict[str, dict[str, Any] | None]:
+        """Derive the enabled optimal periods for today and tomorrow.
+
+        Pure local arithmetic over the blocks already held: no request, no
+        second cache, no second scheduler. A disabled feature is not calculated
+        at all, and its keys stay ``None``.
+
+        Gated on the coordinator's own authoritative completeness set for the
+        same reason the price zones are: "the cheapest four hours of the day"
+        derived from a 20-block morning would silently answer "the cheapest four
+        hours of whatever has arrived so far", and an EMS acting on it could
+        charge straight through the real evening peak. No complete day, no
+        period.
+
+        The zone margins are deliberately not consulted here. An optimal period
+        is a function of the actual prices and the requested duration only.
+
+        A stored duration that is not a usable one (only reachable by editing
+        the config entry by hand, since the options form cannot produce it)
+        yields no period at all rather than a window of some substituted length.
+        It is logged once per offending value so the cause is visible, instead
+        of an entity that is quietly unavailable forever.
+        """
+        options = self.entry.options
+        result: dict[str, dict[str, Any] | None] = {
+            "optimal_cheap_today": None,
+            "optimal_cheap_tomorrow": None,
+            "optimal_expensive_today": None,
+            "optimal_expensive_tomorrow": None,
+        }
+
+        for enabled, duration, mode, key, conf_key in (
+            (
+                get_optimal_cheap_enabled(options),
+                get_optimal_cheap_duration_minutes(options),
+                OPTIMAL_MODE_CHEAP,
+                "optimal_cheap",
+                CONF_OPTIMAL_CHEAP_DURATION_MINUTES,
+            ),
+            (
+                get_optimal_expensive_enabled(options),
+                get_optimal_expensive_duration_minutes(options),
+                OPTIMAL_MODE_EXPENSIVE,
+                "optimal_expensive",
+                CONF_OPTIMAL_EXPENSIVE_DURATION_MINUTES,
+            ),
+        ):
+            if not enabled:
+                continue
+            if duration is None:
+                self._warn_invalid_duration(conf_key, options.get(conf_key))
+                continue
+            if today in self._complete_days:
+                result[f"{key}_today"] = calculate_optimal_period(
+                    today_prices, duration, mode
+                )
+            if tomorrow in self._complete_days:
+                result[f"{key}_tomorrow"] = calculate_optimal_period(
+                    tomorrow_prices, duration, mode
+                )
+
+        return result
 
     # --- Daily price cache -------------------------------------------------
 
@@ -533,6 +668,29 @@ class FrankQuarterPricesCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def get_expensive_zone(self) -> dict[str, Any] | None:
         """Return today's expensive price zone, or None when it is unknown."""
         return (self.data or {}).get("expensive_zone")
+
+    # --- Optimal periods ---------------------------------------------------
+    #
+    # Each enabled period is calculated once per coordinator update (see
+    # ``_derive_optimal_periods``). These accessors only hand out that one
+    # shared result, so the sensor and the binary sensor describing the same
+    # period can never disagree.
+
+    def get_optimal_cheap_today(self) -> dict[str, Any] | None:
+        """Return today's optimal cheap period, or None when unavailable."""
+        return (self.data or {}).get("optimal_cheap_today")
+
+    def get_optimal_cheap_tomorrow(self) -> dict[str, Any] | None:
+        """Return tomorrow's optimal cheap period, or None when unavailable."""
+        return (self.data or {}).get("optimal_cheap_tomorrow")
+
+    def get_optimal_expensive_today(self) -> dict[str, Any] | None:
+        """Return today's optimal expensive period, or None when unavailable."""
+        return (self.data or {}).get("optimal_expensive_today")
+
+    def get_optimal_expensive_tomorrow(self) -> dict[str, Any] | None:
+        """Return tomorrow's optimal expensive period, or None when unavailable."""
+        return (self.data or {}).get("optimal_expensive_tomorrow")
 
     # --- Statistics helpers -----------------------------------------------
 

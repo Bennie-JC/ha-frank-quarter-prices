@@ -345,6 +345,24 @@ def test_no_entity_is_missing_or_extra(hass):
     assert created == set(CONTRACT)
 
 
+def test_the_optional_planner_entities_are_not_part_of_the_default_contract(hass):
+    """A default install gains nothing from the optional optimal periods.
+
+    Both features are off unless the user turns them on, so the contract above
+    is still the *complete* entity set of a fresh or upgraded installation.
+    Anything named ``optimal_*`` appearing here would mean an opt-in feature had
+    started creating entities on its own.
+    """
+    registry = er.async_get(hass)
+    created = {
+        entity.entity_id
+        for entity in registry.entities.values()
+        if entity.platform == DOMAIN
+    }
+    assert not [entity_id for entity_id in created if "optimal" in entity_id]
+    assert len(created) == len(CONTRACT) == 19
+
+
 def test_v0_1_4_entities_all_still_exist(hass):
     """Not one pre-v0.1.6 entity was renamed, dropped or replaced."""
     registry = er.async_get(hass)

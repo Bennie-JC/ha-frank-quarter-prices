@@ -18,12 +18,14 @@
 #   - apexcharts-card        (RomRider/apexcharts-card)
 #   - config-template-card   (iantrich/config-template-card)
 #
-# Tomorrow's prices are only available after Frank publishes them (≈15:00 CET);
-# until then sensor.frank_prices_tomorrow is unavailable and the chart is empty.
+# Tomorrow's prices become available after Frank publishes them, typically
+# between 13:00 and 14:00 market time. Until then the chart remains empty.
+# Market time is Europe/Amsterdam for NL and Europe/Brussels for BE, so it does
+# not follow whatever timezone Home Assistant itself is configured for.
 type: custom:config-template-card
 variables:
-  GREEN: "states['sensor.frank_green_threshold'] ? states['sensor.frank_green_threshold'].state : 0.12"
-  RED: "states['sensor.frank_red_threshold'] ? states['sensor.frank_red_threshold'].state : 0.25"
+  GREEN: "states['input_number.frank_green_threshold'] ? states['input_number.frank_green_threshold'].state : 0.12"
+  RED: "states['input_number.frank_red_threshold'] ? states['input_number.frank_red_threshold'].state : 0.25"
 entities:
   - sensor.frank_prices_tomorrow
 card:
@@ -45,8 +47,10 @@ card:
       height: 320
     legend:
       show: false
+    # No `min` is set on purpose: Frank prices can go negative, and pinning the
+    # axis to 0 would clamp those bars out of sight. ApexCharts scales to the
+    # data, so a negative hour is drawn below the zero line where it belongs.
     yaxis:
-      min: 0
       decimalsInFloat: 3
       labels:
         formatter: |

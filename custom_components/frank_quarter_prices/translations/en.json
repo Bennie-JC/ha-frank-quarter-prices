@@ -21,15 +21,26 @@
           "feed_in_adjustment": "Feed-in adjustment",
           "apply_feed_in_vat": "Apply 21% VAT to feed-in price",
           "cheap_zone_margin_percent": "Cheap price-zone margin",
-          "expensive_zone_margin_percent": "Expensive price-zone margin"
+          "expensive_zone_margin_percent": "Expensive price-zone margin",
+          "optimal_cheap_enabled": "Enable optimal cheap period",
+          "optimal_cheap_duration_minutes": "Optimal cheap period duration",
+          "optimal_expensive_enabled": "Enable optimal expensive period",
+          "optimal_expensive_duration_minutes": "Optimal expensive period duration"
         },
         "data_description": {
           "feed_in_adjustment": "The amount in EUR/kWh added to the verified current market price to calculate the estimated feed-in price. Use a positive value for an additional compensation, a negative value for a deduction, or zero to use the market price unchanged. Contract conditions may differ.",
           "apply_feed_in_vat": "Enable this when the feed-in compensation should be calculated including 21% VAT. VAT is applied to the market price plus the configured feed-in adjustment. Leave this disabled when your compensation is calculated excluding VAT. Verify this against your own Frank Energie contract or statement.",
           "cheap_zone_margin_percent": "The percentage of the day's total price range, measured upward from the cheapest quarter, that is still considered cheap. The longest contiguous run of quarters within that limit forms the cheap price zone. Default 15%, maximum 49%.",
-          "expensive_zone_margin_percent": "The percentage of the day's total price range, measured downward from the most expensive quarter, that is still considered expensive. The longest contiguous run of quarters within that limit forms the expensive price zone. Default 15%, maximum 49%."
+          "expensive_zone_margin_percent": "The percentage of the day's total price range, measured downward from the most expensive quarter, that is still considered expensive. The longest contiguous run of quarters within that limit forms the expensive price zone. Default 15%, maximum 49%.",
+          "optimal_cheap_enabled": "Finds the cheapest contiguous period of exactly the duration set below, for today and for tomorrow. Completely separate from the cheap price zone: only the actual prices and the chosen duration are used, never the zone margin. While this option has never been switched on, the matching entities are not created at all. Switch it off again later and entities created earlier remain as unavailable, so entity IDs and customizations are preserved.",
+          "optimal_cheap_duration_minutes": "The exact length of the cheapest period, in minutes. From 15 to 720 minutes in steps of 15. Only applies while the optimal cheap period above is enabled. The period is always exactly this long and contiguous; if the duration does not fit the day's blocks (90 minutes on an hourly-price day, for instance) the result stays unavailable rather than splitting a price block.",
+          "optimal_expensive_enabled": "Finds the most expensive contiguous period of exactly the duration set below, for today and for tomorrow. Useful for avoiding consumption or for planning export. Completely separate from the expensive price zone: only the actual prices and the chosen duration are used, never the zone margin. While this option has never been switched on, the matching entities are not created at all. Switch it off again later and entities created earlier remain as unavailable, so entity IDs and customizations are preserved.",
+          "optimal_expensive_duration_minutes": "The exact length of the most expensive period, in minutes. From 15 to 720 minutes in steps of 15. Only applies while the optimal expensive period above is enabled."
         }
       }
+    },
+    "error": {
+      "invalid_duration": "Enter a whole number of minutes between 15 and 720, in steps of 15 (for example 60, 120 or 180)."
     }
   }
 }

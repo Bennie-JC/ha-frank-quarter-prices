@@ -8,6 +8,10 @@ from homeassistant.util import dt as dt_util
 from custom_components.frank_quarter_prices.const import (
     CONF_CHEAP_ZONE_MARGIN_PERCENT,
     CONF_EXPENSIVE_ZONE_MARGIN_PERCENT,
+    CONF_OPTIMAL_CHEAP_DURATION_MINUTES,
+    CONF_OPTIMAL_CHEAP_ENABLED,
+    CONF_OPTIMAL_EXPENSIVE_DURATION_MINUTES,
+    CONF_OPTIMAL_EXPENSIVE_ENABLED,
 )
 from custom_components.frank_quarter_prices.diagnostics import (
     async_get_config_entry_diagnostics,
@@ -69,6 +73,103 @@ async def test_diagnostics_reflect_configured_margins(hass, setup_integration):
     assert result["resolved_options"]["cheap_margin_percent"] == 22.0
     assert result["resolved_options"]["expensive_margin_percent"] == 8.0
     assert result["coordinator"]["data"]["cheap_zone"]["margin_percent"] == 22.0
+
+
+async def test_diagnostics_report_the_optimal_period_settings(hass, setup_integration):
+    """Enough to explain an unavailable planner entity, and nothing more."""
+    entry, _ = setup_integration
+    resolved = (await async_get_config_entry_diagnostics(hass, entry))[
+        "resolved_options"
+    ]
+    assert resolved["optimal_cheap_enabled"] is False
+    assert resolved["optimal_expensive_enabled"] is False
+    assert resolved["optimal_cheap_duration_minutes"] == 120
+    assert resolved["optimal_expensive_duration_minutes"] == 120
+
+    hass.config_entries.async_update_entry(
+        entry,
+        options={
+            CONF_OPTIMAL_CHEAP_ENABLED: True,
+            CONF_OPTIMAL_CHEAP_DURATION_MINUTES: 180,
+            CONF_OPTIMAL_EXPENSIVE_ENABLED: False,
+            CONF_OPTIMAL_EXPENSIVE_DURATION_MINUTES: 60,
+        },
+    )
+    await hass.async_block_till_done()
+
+    result = await async_get_config_entry_diagnostics(hass, entry)
+    resolved = result["resolved_options"]
+    assert resolved["optimal_cheap_enabled"] is True
+    assert resolved["optimal_cheap_duration_minutes"] == 180
+    assert resolved["optimal_expensive_enabled"] is False
+    assert resolved["optimal_expensive_duration_minutes"] == 60
+
+    # The derived window travels in the coordinator data, once.
+    data = result["coordinator"]["data"]
+    assert data["optimal_cheap_today"] is not None
+    assert data["optimal_expensive_today"] is None
+    assert set(data["optimal_cheap_today"]) == {
+        "mode",
+        "start",
+        "end",
+        "duration_minutes",
+        "average_price_eur_kwh",
+        "min_price_eur_kwh",
+        "max_price_eur_kwh",
+        "block_count",
+        "resolution_minutes",
+    }
+
+
+async def test_diagnostics_show_an_invalid_duration_as_null(hass, setup_integration):
+    """A corrupt duration is reported as ``null``, and does not raise.
+
+    Diagnostics is exactly where someone looks when a planner entity is
+    unavailable, so this is the field that has to explain it. The offending raw
+    value is not repeated here because ``entry.options`` in the same payload
+    already carries it verbatim.
+    """
+    entry, _ = setup_integration
+    hass.config_entries.async_update_entry(
+        entry,
+        options={
+            CONF_OPTIMAL_CHEAP_ENABLED: True,
+            CONF_OPTIMAL_CHEAP_DURATION_MINUTES: -500,
+        },
+    )
+    await hass.async_block_till_done()
+
+    result = await async_get_config_entry_diagnostics(hass, entry)
+    resolved = result["resolved_options"]
+
+    assert resolved["optimal_cheap_enabled"] is True
+    assert resolved["optimal_cheap_duration_minutes"] is None
+    # The raw value is visible next to it, in the options dump.
+    assert result["entry"]["options"][CONF_OPTIMAL_CHEAP_DURATION_MINUTES] == -500
+    # And no period was derived from it.
+    assert result["coordinator"]["data"]["optimal_cheap_today"] is None
+
+
+async def test_diagnostics_do_not_duplicate_the_daily_array_for_the_planner(
+    hass, setup_integration
+):
+    """The planner adds settings and a window, not a second copy of the day."""
+    entry, _ = setup_integration
+    hass.config_entries.async_update_entry(
+        entry,
+        options={
+            CONF_OPTIMAL_CHEAP_ENABLED: True,
+            CONF_OPTIMAL_CHEAP_DURATION_MINUTES: 120,
+        },
+    )
+    await hass.async_block_till_done()
+
+    data = (await async_get_config_entry_diagnostics(hass, entry))["coordinator"][
+        "data"
+    ]
+    for key in ("optimal_cheap_today", "optimal_cheap_tomorrow"):
+        assert "prices" not in data[key]
+        assert "blocks" not in data[key]
 
 
 async def test_diagnostics_contain_no_credentials(hass, setup_integration):

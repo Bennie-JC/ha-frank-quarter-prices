@@ -14,6 +14,10 @@ from homeassistant.util import dt as dt_util
 from .const import FEED_IN_VAT_RATE, PRICE_UNIT_EUR_KWH
 from .coordinator import FrankQuarterPricesCoordinator
 from .entity import FrankQuarterPricesEntity
+from .optimal_period import (
+    get_optimal_cheap_enabled,
+    get_optimal_expensive_enabled,
+)
 from .price import (
     MARKET_PRICE_FIELD,
     calculate_feed_in_price,
@@ -72,6 +76,44 @@ _ZONE_DEFINITIONS: tuple[tuple[str, str, str, str, str], ...] = (
         "get_expensive_zone",
         "end",
         "mdi:clock-end",
+    ),
+)
+
+# The two optional optimal-period features, each with its today and tomorrow
+# sensor. Each tuple is: (feature key, icon, ((key, name, coordinator helper),
+# ...)). The feature key is only used to decide whether the pair is created.
+_OPTIMAL_DEFINITIONS: tuple[tuple[str, str, tuple[tuple[str, str, str], ...]], ...] = (
+    (
+        "cheap",
+        "mdi:clock-check",
+        (
+            (
+                "optimal_cheap_period_today",
+                "Optimal cheap period today",
+                "get_optimal_cheap_today",
+            ),
+            (
+                "optimal_cheap_period_tomorrow",
+                "Optimal cheap period tomorrow",
+                "get_optimal_cheap_tomorrow",
+            ),
+        ),
+    ),
+    (
+        "expensive",
+        "mdi:clock-alert",
+        (
+            (
+                "optimal_expensive_period_today",
+                "Optimal expensive period today",
+                "get_optimal_expensive_today",
+            ),
+            (
+                "optimal_expensive_period_tomorrow",
+                "Optimal expensive period tomorrow",
+                "get_optimal_expensive_tomorrow",
+            ),
+        ),
     ),
 )
 
@@ -151,6 +193,34 @@ def zone_attributes(zone: dict[str, Any] | None, edge: str) -> dict[str, Any]:
     }
 
 
+def optimal_period_attributes(period: dict[str, Any] | None) -> dict[str, Any]:
+    """Return the shared attribute contract for one optimal period.
+
+    Produced here exactly once so the today sensor and the tomorrow sensor
+    publish the same key set with the same meaning. The matching binary sensor
+    does not use this helper: it deliberately publishes a compact subset of
+    these keys, enough to answer "which window am I in right now". Compact by
+    design: enough to schedule, chart and explain the window, without repeating
+    the day's whole price array on every planner entity.
+    """
+    if period is None:
+        return {}
+    return {
+        "start": _local_iso(period.get("start")),
+        "end": _local_iso(period.get("end")),
+        # Convenience mirror in the ``HH:MM`` style the existing time sensors
+        # use; the state itself is a real timestamp.
+        "start_time": _hhmm(period.get("start")),
+        "end_time": _hhmm(period.get("end")),
+        "duration_minutes": period.get("duration_minutes"),
+        "average_price_eur_kwh": period.get("average_price_eur_kwh"),
+        "min_price_eur_kwh": period.get("min_price_eur_kwh"),
+        "max_price_eur_kwh": period.get("max_price_eur_kwh"),
+        "block_count": period.get("block_count"),
+        "resolution_minutes": period.get("resolution_minutes"),
+    }
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: FrankQuarterPricesConfigEntry,
@@ -190,6 +260,25 @@ async def async_setup_entry(
         FrankPriceZoneBoundarySensor(coordinator, key, name, method_name, edge, icon)
         for key, name, method_name, edge, icon in _ZONE_DEFINITIONS
     )
+
+    # The optimal-period sensors are created only while their feature is
+    # enabled, so a user who never turns it on never gets an entity for it.
+    #
+    # A feature switched off again is simply not re-created; its registry entry
+    # is deliberately left alone (see ``unique_id_for``). Home Assistant then
+    # publishes ``unavailable`` for it, every user customization stays put, and
+    # switching the feature back on reuses the very same registry entry — so the
+    # entity id is identical and no ``_2`` duplicate can appear.
+    enabled = {
+        "cheap": get_optimal_cheap_enabled(entry.options),
+        "expensive": get_optimal_expensive_enabled(entry.options),
+    }
+    for feature, icon, definitions in _OPTIMAL_DEFINITIONS:
+        if enabled[feature]:
+            entities.extend(
+                FrankOptimalPeriodSensor(coordinator, key, name, method_name, icon)
+                for key, name, method_name in definitions
+            )
 
     async_add_entities(entities)
 
@@ -299,10 +388,41 @@ class FrankCurrentReturnPriceSensor(FrankQuarterPricesEntity, SensorEntity):
         }
 
 
-class FrankPricesTodaySensor(FrankQuarterPricesEntity, SensorEntity):
-    """Sensor exposing the number of price blocks for today."""
+class FrankDayPricesSensor(FrankQuarterPricesEntity, SensorEntity):
+    """Base for the two sensors publishing a whole day's price array.
+
+    The ``prices`` attribute carries the complete daily block array — 92, 96 or
+    100 blocks depending on the day — which serializes to roughly 25 kB. That is
+    well past the Recorder's 16384-byte per-state attribute limit, so on every
+    state change the Recorder logged
+
+        State attributes for sensor.frank_prices_today exceed maximum size of
+        16384 bytes. This can cause database performance issues; Attributes will
+        not be stored
+
+    and then stored *no* attributes at all for that state — the array was never
+    persisted anyway, and the small useful attributes next to it were dropped
+    with it.
+
+    ``_unrecorded_attributes`` is Home Assistant's own mechanism for exactly
+    this: the attribute stays a completely ordinary live state attribute that
+    ``state_attr()``, dashboards, templates and EMS consumers read unchanged,
+    while the Recorder filters it out *before* the size check. What is left is
+    a few hundred bytes of summary, so the warning cannot recur and the small
+    attributes are stored again.
+
+    Only ``prices`` is excluded — everything else keeps its history. The
+    attribute is available since Home Assistant 2023.8, comfortably below the
+    2025.1.0 minimum this integration declares.
+    """
+
+    _unrecorded_attributes = frozenset({"prices"})
 
     _attr_native_unit_of_measurement = "blocks"
+
+
+class FrankPricesTodaySensor(FrankDayPricesSensor):
+    """Sensor exposing the number of price blocks for today."""
 
     def __init__(self, coordinator: FrankQuarterPricesCoordinator) -> None:
         """Initialize the prices-today sensor."""
@@ -331,10 +451,8 @@ class FrankPricesTodaySensor(FrankQuarterPricesEntity, SensorEntity):
         }
 
 
-class FrankPricesTomorrowSensor(FrankQuarterPricesEntity, SensorEntity):
+class FrankPricesTomorrowSensor(FrankDayPricesSensor):
     """Sensor exposing the number of price blocks for tomorrow."""
-
-    _attr_native_unit_of_measurement = "blocks"
 
     def __init__(self, coordinator: FrankQuarterPricesCoordinator) -> None:
         """Initialize the prices-tomorrow sensor."""
@@ -521,3 +639,69 @@ class FrankPriceZoneBoundarySensor(FrankQuarterPricesEntity, SensorEntity):
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return the shared price-zone attribute contract."""
         return zone_attributes(self._zone(), self._edge)
+
+
+class FrankOptimalPeriodSensor(FrankQuarterPricesEntity, SensorEntity):
+    """Sensor exposing one optimal cheap/expensive period.
+
+    The state is the period's **start**, as a timezone-aware datetime with the
+    ``timestamp`` device class — the same contract the v0.1.6 zone-boundary
+    sensors already established, and the reason is the same: a period is a
+    *when*, and a real timestamp is directly usable in an automation trigger or
+    a ``> now()`` condition without any parsing or date guessing. Publishing the
+    average price as the state instead would put a number in front of the user
+    that no scheduler can act on and would need the timestamps in attributes
+    anyway; here the price rides along as ``average_price_eur_kwh`` instead,
+    which costs nothing and keeps one consistent contract across cheap and
+    expensive, today and tomorrow.
+
+    The period is derived once per coordinator update; this entity only reads
+    that shared result and never performs its own search or request. Its
+    attributes are deliberately compact — the full daily array lives on
+    ``sensor.frank_prices_today``/``_tomorrow`` and is not duplicated here.
+    """
+
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+
+    def __init__(
+        self,
+        coordinator: FrankQuarterPricesCoordinator,
+        key: str,
+        name: str,
+        method_name: str,
+        icon: str,
+    ) -> None:
+        """Initialize the optimal-period sensor."""
+        super().__init__(coordinator, key, name)
+        self._method_name = method_name
+        self._attr_icon = icon
+
+    def _period(self) -> dict[str, Any] | None:
+        """Return the shared period this sensor describes."""
+        return getattr(self.coordinator, self._method_name)()
+
+    @property
+    def available(self) -> bool:
+        """Available only while a period for that day can be derived.
+
+        Without a complete market day, or with a duration the day cannot
+        compose out of whole blocks, the entity goes unavailable rather than
+        publishing a window that is not really the optimum.
+        """
+        if not super().available:
+            return False
+        return self._period() is not None
+
+    @property
+    def native_value(self) -> datetime | None:
+        """Return the period's start as an aware datetime."""
+        period = self._period()
+        if period is None:
+            return None
+        value = period.get("start")
+        return value if isinstance(value, datetime) else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return the shared optimal-period attribute contract."""
+        return optimal_period_attributes(self._period())

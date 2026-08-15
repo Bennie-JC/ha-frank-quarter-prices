@@ -35,6 +35,7 @@ The integration is included in **HACS Default**, so it's directly searchable and
   - [Sensor overview](#sensor-overview)
   - [Cheapest / most expensive price window sensors](#cheapest--most-expensive-price-window-sensors)
   - [Price zones (cheap / expensive)](#price-zones-cheap--expensive)
+  - [Optimal periods (cheap / expensive)](#optimal-periods-cheap--expensive)
   - [Price block attributes](#price-block-attributes)
 - [Home Assistant Energy Dashboard](#home-assistant-energy-dashboard)
   - [Grid consumption](#grid-consumption)
@@ -60,6 +61,7 @@ The integration is included in **HACS Default**, so it's directly searchable and
 - 💶 **Current price sensor** — the currently active price block, with the full price breakdown as attributes.
 - 📉 Sensors for the **cheapest and most expensive** price window (price + start time) for the **entire day**, for both today and tomorrow.
 - 🏷️ **Price zones** — today's longest contiguous cheap and expensive period, with start/end sensors (real timestamps) and binary sensors telling you whether you are inside that period right now. Both margins are configurable (15% by default).
+- 🎯 **Optimal periods** (optional, off by default) — the cheapest or most expensive contiguous period of **exactly** the duration you set (120 minutes, say), for today *and* tomorrow. Ideal for running a washing machine, heat pump or home battery at the best possible moment.
 - 🗂️ **Full price series** for today and tomorrow as sensor attributes — ideal as a data source for an EMS.
 - 📦 **HACS Default** — directly searchable and installable within HACS, no custom repository needed.
 - 🔁 **Robust updates** — if tomorrow's data isn't available yet, the integration never breaks; the sensors simply stay unavailable until publication.
@@ -134,6 +136,12 @@ Settings → Devices & Services → Frank Quarter Prices → Configure
 | **Apply 21% VAT to feed-in price** | off | on/off | Calculates the feed-in price including 21% VAT, applied to the market price *plus* the feed-in adjustment. |
 | **Cheap price-zone margin** | `15%` | 0 … 49%, step 1% | How much of the day's price range, measured up from the cheapest quarter, still counts as cheap. |
 | **Expensive price-zone margin** | `15%` | 0 … 49%, step 1% | How much of the day's price range, measured down from the most expensive quarter, still counts as expensive. |
+| **Enable optimal cheap period** | off | on/off | Makes the entities for the cheapest contiguous period available. Never switched on? Then they are not created at all. Switch the feature off again later and entities created earlier stay as `unavailable`, so entity IDs and customizations are preserved. |
+| **Optimal cheap period duration** | `120 min` | 15 … 720 min, step 15 | The exact length of that period. Whole minutes on the 15-minute step only; anything else is refused. |
+| **Enable optimal expensive period** | off | on/off | The same for the most expensive contiguous period: never enabled means no entities, disabling later leaves them as `unavailable`. |
+| **Optimal expensive period duration** | `120 min` | 15 … 720 min, step 15 | The exact length of that period. Whole minutes on the 15-minute step only; anything else is refused. |
+
+The form is deliberately one clear list in three logical groups: the feed-in settings first, then the two zone margins, then the two optional optimal periods with their own duration directly beneath each toggle.
 
 Both zone margins **default to 15%** and are freely configurable between 0 and 49% — 15% is not a fixed rule, only the starting value.
 
@@ -149,7 +157,7 @@ Change a margin and the zone sensors, the binary sensors and the dashboard follo
 
 ## Sensors created
 
-The integration creates exactly **19 entities**, tailored for use within an EMS.
+By default the integration creates exactly **19 entities**, tailored for use within an EMS. Enable one of the [optimal periods](#optimal-periods-cheap--expensive) and each feature adds three more: 22 with one feature on, 25 with both. Switch such a feature off again afterwards and those entities remain but become `unavailable` — see [Optimal periods](#optimal-periods-cheap--expensive).
 
 For each day, the integration requests **all** electricity price blocks from Frank Energie (local 00:00 → 24:00) and determines the single cheapest and single most expensive block of that **entire day**, at the raw resolution Frank returns (15 minutes or hourly). There is no filtering to the next 24/48 hours, no filtering to only the current time, no filtering to only the future, and no hourly averaging applied.
 
@@ -276,6 +284,100 @@ binary_sensor.frank_cheap_period = on
 
 The zones are derived **locally** from the price series that has already been fetched. They cost not a single extra API request and use the same quarter-boundary refresh as the rest of the integration.
 
+### Optimal periods (cheap / expensive)
+
+This is an **optional** feature, **off** by default. Enable it and each feature adds three entities.
+
+#### Price zone or optimal period — what's the difference?
+
+The two answer a different question, which is exactly why both exist:
+
+| | Question answered | Length of the result | Configured with |
+| --- | --- | --- | --- |
+| **Price zone** | *Which contiguous part of the day falls inside my cheap/expensive threshold?* | Variable — whatever the day happens to produce | **Margin** in % |
+| **Optimal period** | *Which contiguous period of exactly X minutes has the lowest/highest average price?* | Always exactly the duration you set | **Duration** in minutes |
+
+The two features are completely **independent**. An optimal period looks only at the actual prices and the configured duration; it does **not** use the zone margin. Move the cheap-zone margin from 15% to 40% and your 120-minute optimal period does not shift by a single minute. The same holds in reverse: changing a duration never moves a zone boundary.
+
+The practical consequence: an optimal period may lie partly or even entirely **outside** the price zone. Ask for 4 contiguous hours while the cheap zone only lasts 2, and the integration searches the whole day for the cheapest 4 hours — the only honest way to answer that question.
+
+#### How the period is determined
+
+1. The integration considers **every** contiguous run of price blocks whose real duration equals the configured duration **exactly**.
+2. Each candidate is scored on the duration-**weighted average** of `total_price_eur_kwh`. With the usual quarter-hour blocks that is simply the arithmetic mean; the weighting makes hourly data score correctly too.
+3. The **cheap** period is the candidate with the lowest average, the **expensive** one the highest.
+4. If two candidates score exactly the same, the **earliest** always wins — for both variants.
+
+A few deliberate choices:
+
+- **Genuinely contiguous.** Price blocks are never split, merged or skipped. An expensive quarter in the middle of a cheap period counts in full; it is not left out to flatter the average.
+- **Exactly the requested duration.** Ask for 120 minutes and you never get 105. If the duration does not fit the day's blocks — 90 minutes on a day where Frank publishes only **hourly** prices, for instance — the sensors stay **unavailable**. The integration would rather invent no prices at all than fill in half an hour that was never published. On quarter-hour data every configurable value works, since they are all multiples of 15 minutes.
+- **An unusable configured duration is never silently replaced.** The setting only accepts a whole number of minutes from 15 to 720 in steps of 15; anything else is refused by the form. If an unusable value ends up stored anyway by hand-editing the configuration (`0`, `-15` or `17`, say), the matching entities stay **unavailable** and a warning appears in the log — once per distinct offending value, so the log does not fill up every quarter while a corrected but still unusable value is reported again. The integration deliberately plans nothing rather than quietly carrying on with the 120-minute default — an automation would otherwise run on a duration you never set and cannot see anywhere. A *missing* setting is a different matter: that simply falls back to the 120-minute default.
+- **Negative prices count normally.** The cheapest period naturally picks the most negative average; if the whole day is negative, the most expensive period is the least negative one. Nothing is clamped and no absolute values are used.
+- **A flat day does yield a period.** Unlike the price zones: when every price is exactly equal there is no cheap-versus-expensive distinction and the zones stay unavailable — but "the cheapest contiguous 2 hours" still has a valid answer, and that is the earliest one.
+- **Complete days only.** As with the zones, nothing is published while the day is incomplete; the 92- and 100-quarter daylight-saving days work just as well as an ordinary day.
+
+#### Entities
+
+These entities are **only created once you enable the feature**. Leave it off and they do not exist at all — you never see a trace of them.
+
+Switch a feature back **off** later and the entities stay, becoming `unavailable`. That is deliberate: it keeps every customization of your own — a changed entity ID, name, icon, area, labels, or a hidden/disabled entity — completely intact, and it leaves an automation referring to the entity with a state it can actually react to instead of silently doing nothing. Switch the feature on again and exactly the same entity comes back: same entity ID, same unique ID, same customizations, and never a `_2` suffix, however often you toggle it.
+
+If you want such a leftover entity gone for good, delete it **while the feature is switched off**, via **Settings → Devices & Services → Frank Quarter Prices → entity → delete**. It then stays gone. Deleting it while the feature is *on* achieves nothing: the integration simply recreates it on the next restart or option change. And if you enable the feature again later, the entity naturally comes back too.
+
+| Entity | Description | State |
+| --- | --- | --- |
+| `sensor.frank_optimal_cheap_period_today` | Today's cheapest period | timestamp (start) |
+| `sensor.frank_optimal_cheap_period_tomorrow` | Tomorrow's cheapest period | timestamp (start) |
+| `binary_sensor.frank_optimal_cheap_period` | Whether you are inside today's cheapest period right now | on/off |
+| `sensor.frank_optimal_expensive_period_today` | Today's most expensive period | timestamp (start) |
+| `sensor.frank_optimal_expensive_period_tomorrow` | Tomorrow's most expensive period | timestamp (start) |
+| `binary_sensor.frank_optimal_expensive_period` | Whether you are inside today's most expensive period right now | on/off |
+
+The sensors' **state** is the period's **start** as a full timestamp (`device_class: timestamp`), matching the zone boundaries — directly usable in an automation trigger, with no text to parse. The price rides along as an attribute.
+
+**Period sensor attributes:** `start`, `end`, `start_time` and `end_time` (the familiar `"HH:MM"` rendering), `duration_minutes`, `average_price_eur_kwh`, `min_price_eur_kwh`, `max_price_eur_kwh`, `block_count` and `resolution_minutes`.
+
+**The binary sensors** are **on** while `start <= now < end`, and **unavailable** when no period can be determined for today — never a stale period from yesterday, and never `off` where "unknown" is meant. Their attributes are `start`, `end`, `duration_minutes` and `average_price_eur_kwh`.
+
+The `*_tomorrow` sensors stay unavailable until Frank publishes tomorrow's prices, then appear on their own. At midnight tomorrow's period becomes today's period without any extra request.
+
+Example:
+
+```text
+sensor.frank_optimal_cheap_period_today = 2026-08-06T10:00:00+02:00
+  attributes:
+    start: "2026-08-06T10:00:00+02:00"
+    end: "2026-08-06T12:00:00+02:00"
+    start_time: "10:00"
+    end_time: "12:00"
+    duration_minutes: 120
+    average_price_eur_kwh: 0.146
+    min_price_eur_kwh: 0.146
+    max_price_eur_kwh: 0.146
+    block_count: 8
+    resolution_minutes: 15
+
+binary_sensor.frank_optimal_cheap_period = on
+```
+
+Automation example — start the washing machine when today's cheapest period begins:
+
+```yaml
+automation:
+  - alias: "Washing machine during the cheapest period"
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.frank_optimal_cheap_period
+        to: "on"
+    action:
+      - service: switch.turn_on
+        target:
+          entity_id: switch.washing_machine
+```
+
+Like the price zones, the optimal periods are derived **locally** from the price series that has already been fetched: the calculation costs **zero** extra API requests, and adds no second coordinator, no extra timer and no fetch of its own. Enabling one or changing a setting does still make Home Assistant reload the integration — as it does for any option change — after which today's prices (and tomorrow's, past 12:00 market-local time) are fetched once more.
+
 ### Price block attributes
 
 The `full_block` attribute (and each item in the `prices` series) has the following shape:
@@ -294,6 +396,8 @@ per_unit: "kWh"
 
 The `sensor.frank_prices_today` and `sensor.frank_prices_tomorrow` sensors expose the **full series** of price blocks for the entire day in their `prices` attribute, together with `resolution_minutes`, `cheapest_block`, `most_expensive_block`, `average_price`, `min_price`, and `max_price`. That makes them the convenient single source an EMS can plan against. `sensor.frank_prices_tomorrow` adds `available` and `last_attempt` on top of those.
 
+> **About the database (Recorder).** The full daily series is roughly 25 kB, which exceeded the 16384-byte limit Home Assistant applies to attributes stored in history. That produced the warning *"State attributes for sensor.frank_prices_today exceed maximum size of 16384 bytes"* on every state change, after which the Recorder skipped **all** attributes of that state. The `prices` attribute is therefore no longer stored in the database. Nothing changes for your dashboards, templates, automations or EMS: `state_attr('sensor.frank_prices_today', 'prices')` still returns the complete, live series. Only the historical storage of that one attribute is dropped — precisely the history the Recorder was already refusing to keep. The small summary attributes beside it are now stored properly again.
+
 ---
 
 ## Home Assistant Energy Dashboard
@@ -309,7 +413,7 @@ Use an entity with current price
 → sensor.frank_current_price
 
 Export compensation:
-Use an entity with current price
+Use an entity with current rate
 → Current feed-in price
 → sensor.frank_current_return_price
 ```
@@ -341,7 +445,7 @@ This sensor is used for the **cost of electricity you draw from the grid** and h
 This is the **current feed-in compensation** for electricity you **feed back into the grid**. In the same configuration, under **Export compensation**, choose:
 
 ```text
-Use an entity with current price
+Use an entity with current rate
 ```
 
 Then select the entity shown as **Current feed-in price**:
@@ -561,7 +665,7 @@ After installing, reload your browser (or clear the frontend cache) so the new c
 - The chart reads the **`prices`** attribute of `sensor.frank_prices_today` (or `sensor.frank_prices_tomorrow`).
 - Each item in `attributes.prices` is plotted individually using its **`from`** timestamp (x-axis) and its **`total_price_eur_kwh`** value (y-axis).
 - Because each bar carries its own timestamp, quarter-hour blocks are plotted exactly at `00:00`, `00:15`, `00:30`, … as returned — without rounding to the hour.
-- The three **color thresholds** (green → orange → red) can be adjusted manually in the YAML, or driven by optional `input_number` helpers (`sensor.frank_green_threshold` / `sensor.frank_red_threshold`); the examples fall back to `0.12` and `0.25 €/kWh` when those helpers don't exist.
+- The three **color thresholds** (green → orange → red) can be adjusted manually in the YAML, or driven by optional `input_number` helpers (`input_number.frank_green_threshold` / `input_number.frank_red_threshold`); you create those yourself — they are not part of this integration — and the examples fall back to `0.12` and `0.25 €/kWh` when those helpers don't exist.
 
 Ready-to-use files are available in [examples/](examples/):
 
@@ -575,8 +679,8 @@ Add a new **Manual** dashboard card and paste:
 ```yaml
 type: custom:config-template-card
 variables:
-  GREEN: "states['sensor.frank_green_threshold'] ? states['sensor.frank_green_threshold'].state : 0.12"
-  RED: "states['sensor.frank_red_threshold'] ? states['sensor.frank_red_threshold'].state : 0.25"
+  GREEN: "states['input_number.frank_green_threshold'] ? states['input_number.frank_green_threshold'].state : 0.12"
+  RED: "states['input_number.frank_red_threshold'] ? states['input_number.frank_red_threshold'].state : 0.25"
 entities:
   - sensor.frank_prices_today
 card:
@@ -597,8 +701,10 @@ card:
       height: 320
     legend:
       show: false
+    # No `min` on purpose: Frank prices can go negative, and pinning the axis
+    # to 0 would clamp those bars out of sight. ApexCharts scales to the data,
+    # so a negative hour is drawn below the zero line where it belongs.
     yaxis:
-      min: 0
       decimalsInFloat: 3
       labels:
         formatter: |
@@ -646,8 +752,8 @@ Same style, but reads `sensor.frank_prices_tomorrow`. The card stays empty until
 ```yaml
 type: custom:config-template-card
 variables:
-  GREEN: "states['sensor.frank_green_threshold'] ? states['sensor.frank_green_threshold'].state : 0.12"
-  RED: "states['sensor.frank_red_threshold'] ? states['sensor.frank_red_threshold'].state : 0.25"
+  GREEN: "states['input_number.frank_green_threshold'] ? states['input_number.frank_green_threshold'].state : 0.12"
+  RED: "states['input_number.frank_red_threshold'] ? states['input_number.frank_red_threshold'].state : 0.25"
 entities:
   - sensor.frank_prices_tomorrow
 card:
@@ -669,8 +775,10 @@ card:
       height: 320
     legend:
       show: false
+    # No `min` on purpose: Frank prices can go negative, and pinning the axis
+    # to 0 would clamp those bars out of sight. ApexCharts scales to the data,
+    # so a negative hour is drawn below the zero line where it belongs.
     yaxis:
-      min: 0
       decimalsInFloat: 3
       labels:
         formatter: |

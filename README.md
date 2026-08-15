@@ -39,6 +39,7 @@ De integratie is opgenomen in **HACS Default** en dus rechtstreeks doorzoekbaar 
   - [Sensoroverzicht](#sensoroverzicht)
   - [Sensoren goedkoopste / duurste prijsvenster](#sensoren-goedkoopste--duurste-prijsvenster)
   - [Prijszones (goedkoop / duur)](#prijszones-goedkoop--duur)
+  - [Optimale periodes (goedkoop / duur)](#optimale-periodes-goedkoop--duur)
   - [Attributen van prijsblokken](#attributen-van-prijsblokken)
 - [Home Assistant Energy Dashboard](#home-assistant-energy-dashboard)
   - [Netafname (verbruik)](#netafname-verbruik)
@@ -64,6 +65,7 @@ De integratie is opgenomen in **HACS Default** en dus rechtstreeks doorzoekbaar 
 - 💶 **Sensor voor de huidige prijs** — het actieve prijsblok, met de volledige prijsopbouw als attributen.
 - 📉 Sensoren voor het **goedkoopste en duurste** prijsvenster (prijs + starttijd) voor de **volledige dag**, zowel vandaag als morgen.
 - 🏷️ **Prijszones** — de langste aaneengesloten goedkope en dure periode van vandaag, met start- en eindsensoren (echte tijdstempels) en binaire sensoren die aangeven of je nu ín die periode zit. De marges zijn instelbaar (standaard 15%).
+- 🎯 **Optimale periodes** (optioneel, standaard uit) — de goedkoopste of duurste aaneengesloten periode van **precies** de duur die jij instelt (bijvoorbeeld 120 minuten), voor vandaag én morgen. Ideaal om een wasmachine, warmtepomp of thuisbatterij op het beste moment te laten draaien.
 - 🗂️ **Volledige prijsreeksen** voor vandaag en morgen als sensorattributen — ideaal als databron voor een EMS.
 - 📦 **HACS Default** — direct doorzoekbaar en installeerbaar binnen HACS, geen aangepaste repository nodig.
 - 🔁 **Robuuste updates** — als de data voor morgen nog niet beschikbaar is, breekt dit de integratie nooit; de sensoren blijven simpelweg onbeschikbaar tot publicatie.
@@ -143,6 +145,12 @@ Instellingen → Apparaten & diensten → Frank Quarter Prices → Configureren
 | **21% btw toepassen op terugleverprijs** | uit | aan/uit | Rekent de terugleverprijs inclusief 21% btw, toegepast op de marktprijs plús de teruglevercorrectie. |
 | **Marge goedkope prijszone** | `15%` | 0 … 49%, stap 1% | Welk deel van het dagelijkse prijsverschil, gerekend vanaf het goedkoopste kwartier, nog als goedkoop telt. |
 | **Marge dure prijszone** | `15%` | 0 … 49%, stap 1% | Welk deel van het dagelijkse prijsverschil, gerekend vanaf het duurste kwartier, nog als duur telt. |
+| **Optimale goedkope periode inschakelen** | uit | aan/uit | Maakt de entiteiten voor de goedkoopste aaneengesloten periode beschikbaar. Nooit ingeschakeld geweest? Dan worden ze niet aangemaakt. Schakel je de functie later weer uit, dan blijven eerder aangemaakte entiteiten bestaan als `unavailable`, zodat entity-ID's en aanpassingen behouden blijven. |
+| **Duur optimale goedkope periode** | `120 min` | 15 … 720 min, stap 15 | De exacte lengte van die periode. Alleen hele minuten op de stap van 15; andere waarden worden geweigerd. |
+| **Optimale dure periode inschakelen** | uit | aan/uit | Idem voor de duurste aaneengesloten periode: nooit ingeschakeld betekent geen entiteiten, later uitschakelen laat ze als `unavailable` staan. |
+| **Duur optimale dure periode** | `120 min` | 15 … 720 min, stap 15 | De exacte lengte van die periode. Alleen hele minuten op de stap van 15; andere waarden worden geweigerd. |
+
+Het formulier is bewust één overzichtelijke lijst in drie logische groepen: eerst de terugleverinstellingen, dan de twee zonemarges, dan de twee optionele optimale periodes met elk hun eigen duur er direct onder.
 
 Beide zonemarges staan **standaard op 15%** en zijn vrij instelbaar tussen 0 en 49%; 15% is dus geen vaste regel maar alleen de startwaarde.
 
@@ -158,7 +166,7 @@ Wijzig je een marge, dan volgen de zonesensoren, de binaire sensoren en het dash
 
 ## Aangemaakte sensoren
 
-De integratie maakt exact **19 entiteiten** aan, afgestemd op gebruik binnen een EMS.
+De integratie maakt standaard exact **19 entiteiten** aan, afgestemd op gebruik binnen een EMS. Schakel je een van de [optimale periodes](#optimale-periodes-goedkoop--duur) in, dan komen daar drie entiteiten per functie bij: 22 met één functie aan, 25 met beide. Schakel je zo'n functie daarna weer uit, dan blijven die entiteiten bestaan maar worden ze `unavailable` — zie [Optimale periodes](#optimale-periodes-goedkoop--duur).
 
 Voor elke dag vraagt de integratie **alle** prijsblokken voor stroom op bij Frank Energie (lokaal 00:00 → 24:00) en bepaalt het enige goedkoopste en het enige duurste blok van die **volledige dag**, op de ruwe resolutie die Frank teruggeeft (15 minuten of per uur). Er wordt geen filtering op de komende 24/48 uur, geen filtering op alleen de huidige tijd, geen filtering op alleen de toekomst en geen uurgemiddelde toegepast.
 
@@ -285,6 +293,100 @@ binary_sensor.frank_cheap_period = on
 
 De zones worden **lokaal** afgeleid uit de prijsreeks die al is opgehaald. Ze kosten geen enkele extra API-aanvraag en gebruiken dezelfde kwartiergrens-verversing als de rest van de integratie.
 
+### Optimale periodes (goedkoop / duur)
+
+Dit is een **optionele** functie die standaard **uit** staat. Zet je hem aan, dan komen er per functie drie entiteiten bij.
+
+#### Prijszone of optimale periode — wat is het verschil?
+
+De twee beantwoorden een verschillende vraag, en juist daarom bestaan ze allebei:
+
+| | Vraag die beantwoord wordt | Lengte van het resultaat | Ingesteld met |
+| --- | --- | --- | --- |
+| **Prijszone** | *Welk aaneengesloten deel van de dag valt binnen mijn goedkope/dure drempel?* | Variabel — wat de dag toevallig oplevert | **Marge** in % |
+| **Optimale periode** | *Welke aaneengesloten periode van precies X minuten heeft de laagste/hoogste gemiddelde prijs?* | Altijd exact de door jou ingestelde duur | **Duur** in minuten |
+
+De twee functies zijn volledig **onafhankelijk**. De optimale periode kijkt uitsluitend naar de werkelijke prijzen en de ingestelde duur en gebruikt de zonemarge **niet**. Zet je de goedkope zonemarge van 15% naar 40%, dan verschuift je optimale periode van 120 minuten geen minuut. Andersom geldt hetzelfde: een andere duur verandert nooit een zonegrens.
+
+Praktisch gevolg: de optimale periode mag gedeeltelijk of zelfs helemaal **buiten** de prijszone liggen. Vraag je om 4 uur aaneengesloten terwijl de goedkope zone maar 2 uur duurt, dan zoekt de integratie de goedkoopste 4 uur van de hele dag — dat is de enige eerlijke manier om die vraag te beantwoorden.
+
+#### Hoe de periode wordt bepaald
+
+1. De integratie bekijkt **elke** aaneengesloten reeks prijsblokken waarvan de werkelijke duur **exact** gelijk is aan de ingestelde duur.
+2. Van elke kandidaat wordt het naar bloklengte **gewogen gemiddelde** van `total_price_eur_kwh` berekend. Bij de gebruikelijke kwartierblokken is dat gewoon het rekenkundig gemiddelde; de weging zorgt dat ook uurdata correct meetelt.
+3. De **goedkope** periode is de kandidaat met het laagste gemiddelde, de **dure** die met het hoogste.
+4. Zijn twee kandidaten precies even goed, dan wint altijd de **vroegste** — voor beide varianten.
+
+Een paar bewuste keuzes:
+
+- **Echt aaneengesloten.** Prijsblokken worden nooit opgeknipt, samengevoegd of overgeslagen. Een duur kwartier midden in een goedkope periode telt gewoon mee; het wordt niet weggelaten om het gemiddelde mooier te maken.
+- **Exact de gevraagde duur.** Vraag je 120 minuten, dan krijg je nooit 105 minuten. Past de duur niet op de blokken van de dag — bijvoorbeeld 90 minuten op een dag waarop Frank alleen **uurprijzen** publiceert — dan blijven de sensoren **onbeschikbaar**. De integratie verzint liever geen prijzen dan dat ze een half uur invult dat nooit is gepubliceerd. Op kwartierdata werkt elke instelbare waarde, want die zijn allemaal een veelvoud van 15 minuten.
+- **Een onbruikbare ingestelde duur wordt nooit stilzwijgend vervangen.** De instelling accepteert alleen een heel aantal minuten van 15 tot en met 720 in stappen van 15; iets anders wordt in het formulier geweigerd. Staat er door handmatig bewerken van de configuratie tóch een onbruikbare waarde (bijvoorbeeld `0`, `-15` of `17`), dan blijven de bijbehorende entiteiten **onbeschikbaar** en verschijnt er een waarschuwing in het logboek — één keer per afwijkende waarde, zodat het logboek niet elk kwartier volloopt maar een gecorrigeerde en tóch nog onbruikbare waarde opnieuw gemeld wordt. De integratie plant dan bewust niets, in plaats van stilletjes met de standaard van 120 minuten door te gaan — een automatisering zou anders draaien op een duur die je nooit hebt ingesteld en nergens kunt zien. Een ontbrekende instelling is iets anders: die valt gewoon terug op de standaard van 120 minuten.
+- **Negatieve prijzen tellen gewoon mee.** De goedkoopste periode kiest vanzelf het meest negatieve gemiddelde; is de hele dag negatief, dan is de duurste periode de minst negatieve. Er wordt niet afgekapt en niet met absolute waarden gerekend.
+- **Een vlakke dag levert wél een periode op.** Anders dan bij de prijszones: staan alle prijzen exact gelijk, dan is er geen goedkoop-versus-duur onderscheid en blijven de zones onbeschikbaar — maar "de goedkoopste aaneengesloten 2 uur" heeft nog steeds een geldig antwoord, en dat is dan de vroegste.
+- **Alleen bij een volledige dag.** Net als bij de zones wordt er niets gepubliceerd zolang de dag onvolledig is; de zomer-/wintertijddagen van 92 en 100 kwartieren werken net zo goed als een gewone dag.
+
+#### Entiteiten
+
+Deze entiteiten worden **alleen aangemaakt zodra je de functie inschakelt**. Laat je de functie uit staan, dan bestaan ze niet en zie je er niets van terug.
+
+Zet je een functie later weer **uit**, dan blijven de entiteiten wél bestaan en worden ze `unavailable`. Dat is bewust: zo blijven je eigen aanpassingen — een gewijzigde entity-ID, naam, icoon, gebied, labels of een verborgen/uitgeschakelde entiteit — volledig behouden, en blijft een automatisering die naar de entiteit verwijst een status zien waar hij op kan reageren in plaats van stilzwijgend niets te doen. Zet je de functie weer aan, dan komt exact dezelfde entiteit terug: hetzelfde entity-ID, dezelfde unique ID, dezelfde aanpassingen, en nooit een `_2`-achtervoegsel — hoe vaak je ook wisselt.
+
+Wil je zo'n achtergebleven entiteit echt kwijt, verwijder hem dan **terwijl de functie uit staat**, via **Instellingen → Apparaten & diensten → Frank Quarter Prices → entiteit → verwijderen**. Dan blijft hij weg. Verwijderen terwijl de functie áán staat heeft geen zin: de integratie maakt de entiteit bij de eerstvolgende herstart of optiewijziging gewoon opnieuw aan. Zet je de functie later weer aan, dan komt de entiteit natuurlijk ook gewoon terug.
+
+| Entiteit | Beschrijving | Status |
+| --- | --- | --- |
+| `sensor.frank_optimal_cheap_period_today` | Goedkoopste periode van vandaag | tijdstempel (start) |
+| `sensor.frank_optimal_cheap_period_tomorrow` | Goedkoopste periode van morgen | tijdstempel (start) |
+| `binary_sensor.frank_optimal_cheap_period` | Of je nú in de goedkoopste periode van vandaag zit | aan/uit |
+| `sensor.frank_optimal_expensive_period_today` | Duurste periode van vandaag | tijdstempel (start) |
+| `sensor.frank_optimal_expensive_period_tomorrow` | Duurste periode van morgen | tijdstempel (start) |
+| `binary_sensor.frank_optimal_expensive_period` | Of je nú in de duurste periode van vandaag zit | aan/uit |
+
+De **status** van de sensoren is de **starttijd** als volledige tijdstempel (`device_class: timestamp`), net als bij de zonegrenzen — direct bruikbaar in een automatiseringstrigger, zonder tekst te parsen. De prijs staat als attribuut erbij.
+
+**Attributen van de periodesensoren:** `start`, `end`, `start_time` en `end_time` (de vertrouwde `"HH:MM"`-weergave), `duration_minutes`, `average_price_eur_kwh`, `min_price_eur_kwh`, `max_price_eur_kwh`, `block_count` en `resolution_minutes`.
+
+**De binaire sensoren** zijn **aan** zolang `start <= nu < eind`, en **onbeschikbaar** wanneer er voor vandaag geen periode bepaald kan worden — nooit een verouderde periode van gisteren, en nooit `uit` waar "onbekend" wordt bedoeld. Hun attributen zijn `start`, `end`, `duration_minutes` en `average_price_eur_kwh`.
+
+De `*_tomorrow`-sensoren blijven onbeschikbaar tot Frank de prijzen voor morgen publiceert en verschijnen daarna vanzelf. Om middernacht wordt de periode van morgen zonder enige extra aanvraag de periode van vandaag.
+
+Voorbeeld:
+
+```text
+sensor.frank_optimal_cheap_period_today = 2026-08-06T10:00:00+02:00
+  attributes:
+    start: "2026-08-06T10:00:00+02:00"
+    end: "2026-08-06T12:00:00+02:00"
+    start_time: "10:00"
+    end_time: "12:00"
+    duration_minutes: 120
+    average_price_eur_kwh: 0.146
+    min_price_eur_kwh: 0.146
+    max_price_eur_kwh: 0.146
+    block_count: 8
+    resolution_minutes: 15
+
+binary_sensor.frank_optimal_cheap_period = on
+```
+
+Automatiseringsvoorbeeld — start de wasmachine zodra de goedkoopste periode van vandaag begint:
+
+```yaml
+automation:
+  - alias: "Wasmachine in de goedkoopste periode"
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.frank_optimal_cheap_period
+        to: "on"
+    action:
+      - service: switch.turn_on
+        target:
+          entity_id: switch.wasmachine
+```
+
+Net als de prijszones worden de optimale periodes **lokaal** afgeleid uit de prijsreeks die al is opgehaald: de berekening kost **nul** extra API-aanvragen, en er komt geen tweede coordinator, geen extra timer en geen eigen ophaalmoment bij. Het inschakelen of aanpassen van een instelling laat Home Assistant de integratie wél gewoon herladen — net als bij elke andere optiewijziging — waarna de prijzen van vandaag (en na 12:00 markttijd ook die van morgen) één keer opnieuw worden opgehaald.
+
 ### Attributen van prijsblokken
 
 Het attribuut `full_block` (en elk item in de `prices`-reeksen) heeft de volgende vorm:
@@ -302,6 +404,8 @@ per_unit: "kWh"
 ```
 
 De sensoren `sensor.frank_prices_today` en `sensor.frank_prices_tomorrow` stellen de **volledige reeks** prijsblokken voor de hele dag beschikbaar in hun `prices`-attribuut, samen met `resolution_minutes`, `cheapest_block`, `most_expensive_block`, `average_price`, `min_price` en `max_price`. Daarmee zijn ze de handige enkele bron waartegen een EMS kan plannen. `sensor.frank_prices_tomorrow` voegt daar `available` en `last_attempt` aan toe.
+
+> **Over de database (Recorder).** De volledige dagreeks is ongeveer 25 kB groot en overschreed daarmee de limiet van 16384 bytes die Home Assistant hanteert voor attributen in de geschiedenis. Dat leverde bij elke statuswijziging de waarschuwing *"State attributes for sensor.frank_prices_today exceed maximum size of 16384 bytes"* op, waarna de Recorder vervolgens **alle** attributen van die status oversloeg. Het `prices`-attribuut wordt daarom niet meer in de database opgeslagen. Voor je dashboards, templates, automatiseringen en EMS verandert er **niets**: `state_attr('sensor.frank_prices_today', 'prices')` geeft nog steeds de volledige, actuele reeks terug. Alleen de historische opslag van dat ene attribuut vervalt — precies de historie die de Recorder toch al weigerde te bewaren. De kleine samenvattingsattributen ernaast worden nu wél weer netjes bewaard.
 
 ---
 
@@ -570,7 +674,7 @@ Herlaad na de installatie je browser (of leeg de frontend-cache) zodat de nieuwe
 - De grafiek leest het attribuut **`prices`** van `sensor.frank_prices_today` (of `sensor.frank_prices_tomorrow`).
 - Elk item in `attributes.prices` wordt afzonderlijk weergegeven aan de hand van het **`from`**-tijdstempel (x-as) en de **`total_price_eur_kwh`**-waarde (y-as).
 - Omdat elke staaf zijn eigen tijdstempel heeft, worden kwartierblokken precies op `00:00`, `00:15`, `00:30`, … geplot zoals teruggegeven — zonder afronding naar het uur.
-- De drie **kleurdrempels** (groen → oranje → rood) kun je handmatig aanpassen in de YAML, of laten aansturen door optionele `input_number`-helpers (`sensor.frank_green_threshold` / `sensor.frank_red_threshold`); de voorbeelden vallen terug op `0.12` en `0.25 €/kWh` wanneer die helpers niet bestaan.
+- De drie **kleurdrempels** (groen → oranje → rood) kun je handmatig aanpassen in de YAML, of laten aansturen door optionele `input_number`-helpers (`input_number.frank_green_threshold` / `input_number.frank_red_threshold`); die maak je zelf aan — ze horen niet bij deze integratie — en de voorbeelden vallen terug op `0.12` en `0.25 €/kWh` wanneer die helpers niet bestaan.
 
 Kant-en-klare bestanden vind je in [examples/](examples/):
 
@@ -584,8 +688,8 @@ Voeg een nieuwe **Handmatige** dashboardkaart toe en plak:
 ```yaml
 type: custom:config-template-card
 variables:
-  GREEN: "states['sensor.frank_green_threshold'] ? states['sensor.frank_green_threshold'].state : 0.12"
-  RED: "states['sensor.frank_red_threshold'] ? states['sensor.frank_red_threshold'].state : 0.25"
+  GREEN: "states['input_number.frank_green_threshold'] ? states['input_number.frank_green_threshold'].state : 0.12"
+  RED: "states['input_number.frank_red_threshold'] ? states['input_number.frank_red_threshold'].state : 0.25"
 entities:
   - sensor.frank_prices_today
 card:
@@ -606,8 +710,10 @@ card:
       height: 320
     legend:
       show: false
+    # Bewust geen `min`: Frank-prijzen kunnen negatief worden, en de as op 0
+    # vastzetten zou die staven buiten beeld duwen. ApexCharts schaalt mee met
+    # de data, zodat een negatief uur onder de nullijn wordt getekend.
     yaxis:
-      min: 0
       decimalsInFloat: 3
       labels:
         formatter: |
@@ -655,8 +761,8 @@ Dezelfde stijl, maar leest `sensor.frank_prices_tomorrow`. De kaart blijft leeg 
 ```yaml
 type: custom:config-template-card
 variables:
-  GREEN: "states['sensor.frank_green_threshold'] ? states['sensor.frank_green_threshold'].state : 0.12"
-  RED: "states['sensor.frank_red_threshold'] ? states['sensor.frank_red_threshold'].state : 0.25"
+  GREEN: "states['input_number.frank_green_threshold'] ? states['input_number.frank_green_threshold'].state : 0.12"
+  RED: "states['input_number.frank_red_threshold'] ? states['input_number.frank_red_threshold'].state : 0.25"
 entities:
   - sensor.frank_prices_tomorrow
 card:
@@ -678,8 +784,10 @@ card:
       height: 320
     legend:
       show: false
+    # Bewust geen `min`: Frank-prijzen kunnen negatief worden, en de as op 0
+    # vastzetten zou die staven buiten beeld duwen. ApexCharts schaalt mee met
+    # de data, zodat een negatief uur onder de nullijn wordt getekend.
     yaxis:
-      min: 0
       decimalsInFloat: 3
       labels:
         formatter: |
