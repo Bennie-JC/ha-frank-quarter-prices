@@ -284,13 +284,16 @@ async def async_setup_entry(
 
 
 class FrankCurrentPriceSensor(FrankQuarterPricesEntity, SensorEntity):
-    """Sensor exposing the current electricity purchase price.
+    """Sensor exposing Frank's dynamic "marktprijs+" import price.
 
-    Suitable as the "current electricity price" entity for the Home Assistant
-    Energy Dashboard: monetary device class, EUR/kWh. No ``state_class`` is set:
-    this is an instantaneous price, not a cumulative total, and the Energy
-    Dashboard current-price selector does not require one. The state stays
-    numeric (``total_price_eur_kwh``) or unavailable.
+    This is Frank's dynamic price component (market price + sourcing markup),
+    which Frank bills as "het dynamische deel" — not the all-in consumer price.
+    It is the "current electricity price" entity for the Home Assistant Energy
+    Dashboard: monetary device class, EUR/kWh. No ``state_class`` is set: this is
+    an instantaneous price, not a cumulative total. The state stays numeric on the
+    marktprijs+ basis, or unavailable when no block covers the active quarter.
+    The all-in price remains reachable on the same entity as
+    ``full_block.total_price_eur_kwh``.
     """
 
     _attr_device_class = SensorDeviceClass.MONETARY

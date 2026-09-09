@@ -5,6 +5,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **BREAKING**: The state of `sensor.frank_current_price` changes from Frank's complete consumer all-in price to Frank's dynamic **"marktprijs+"** basis, computed as `market_price + market_price_tax + sourcing_markup_price` from the actual per-quarter values in the price block — the dynamic component Frank bills as "het dynamische deel", which is the all-in price minus the energy tax. All three components are required because their VAT bases differ: `market_price` excludes VAT (its 21% arrives separately as `market_price_tax`) while `sourcing_markup_price` already includes it. The formula was verified against Frank's own `marketPricePlus` field on the public API and reproduced it exactly on all 288 quarter-hour blocks checked across three days; no VAT rate, markup or tax amount is hard-coded. The entity id, unique id, friendly name, unit `EUR/kWh`, device class `monetary`, state class and attribute key set are all unchanged; only the numeric state value changes (e.g. `0.26440` → `0.15355` at 2026-09-09 10:00 local). The energy tax is no longer included in this sensor, so it is no longer a complete consumer price. Existing history is not back-filled, so the Energy Dashboard cost curve will show a visible step at the upgrade. The previous all-in value stays reachable on the same entity via the `full_block.total_price_eur_kwh` attribute, and the cheapest/most-expensive, daily-array, price-zone and optimal-period sensors keep the all-in basis. Automations comparing `sensor.frank_current_price` against an absolute threshold must be re-tuned.
+
 ## [0.1.7] - 2026-08-15
 
 ### Fixed

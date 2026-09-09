@@ -70,6 +70,22 @@ def _expected_total(index: int, base_price: float = 0.10) -> float:
     ]
 
 
+def _expected_dynamic(index: int, base_price: float = 0.10) -> float:
+    """Return the marktprijs+ value for the quarter at ``index`` in ``_stepped_day``.
+
+    ``market_price`` excludes VAT and ``sourcing_markup_price`` includes it, so
+    the market price's own VAT component belongs in the sum.
+    """
+    price = round(base_price + index * 0.001, 6)
+    block = build_block(datetime(2000, 1, 1, tzinfo=dt_util.UTC), price)
+    return round(
+        block["market_price"]
+        + block["market_price_tax"]
+        + block["sourcing_markup_price"],
+        6,
+    )
+
+
 @pytest.fixture
 def stepped_client():
     """Client mock returning a distinct price per quarter for any requested day."""
@@ -165,7 +181,7 @@ async def test_current_price_updates_within_seconds_of_boundary(
         await _setup_at(hass, mock_config_entry, start)
         state = hass.states.get(CURRENT_PRICE)
         # 10:07 falls in the 10:00 block -> index 40.
-        assert float(state.state) == pytest.approx(_expected_total(40))
+        assert float(state.state) == pytest.approx(_expected_dynamic(40))
 
         frozen_time.move_to(start.replace(minute=15, second=3, microsecond=0))
         async_fire_time_changed(hass)
@@ -173,7 +189,7 @@ async def test_current_price_updates_within_seconds_of_boundary(
 
         state = hass.states.get(CURRENT_PRICE)
         # 10:15 block -> index 41.
-        assert float(state.state) == pytest.approx(_expected_total(41))
+        assert float(state.state) == pytest.approx(_expected_dynamic(41))
     finally:
         freezer.stop()
 
@@ -212,7 +228,7 @@ async def test_midnight_rollover_happens_promptly(
 
         current_price_state = hass.states.get(CURRENT_PRICE)
         # 00:00 block of the new day -> index 0.
-        assert float(current_price_state.state) == pytest.approx(_expected_total(0))
+        assert float(current_price_state.state) == pytest.approx(_expected_dynamic(0))
     finally:
         freezer.stop()
 

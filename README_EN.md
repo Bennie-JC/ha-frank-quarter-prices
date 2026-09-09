@@ -165,7 +165,7 @@ For each day, the integration requests **all** electricity price blocks from Fra
 
 | Entity | Description | State | Unit |
 | --- | --- | --- | --- |
-| `sensor.frank_current_price` | Price of the currently active block | `total_price_eur_kwh` | EUR/kWh |
+| `sensor.frank_current_price` | Dynamic purchase price ("marktprijs+") of the currently active block | `market_price + market_price_tax + sourcing_markup_price` | EUR/kWh |
 | `sensor.frank_current_return_price` | Estimated current electricity feed-in price, based on the verified Frank market-price field and the configured feed-in adjustment | calculated price | EUR/kWh |
 | `sensor.frank_cheapest_today` | Cheapest block price of the entire day today | `total_price_eur_kwh` | EUR/kWh |
 | `sensor.frank_cheapest_time_today` | Start time of the cheapest block today | `HH:MM` | — |
@@ -438,7 +438,17 @@ Then select the entity shown as **Current price**:
 sensor.frank_current_price
 ```
 
-This sensor is used for the **cost of electricity you draw from the grid** and holds the current purchase price (`total_price_eur_kwh`) as a numeric value in **EUR/kWh**, with the correct metadata (`device_class: monetary`), so the Home Assistant Energy Dashboard accepts it as a price entity. No `state_class` is deliberately set: this is a current price, not a cumulative total.
+This sensor is used for the **cost of electricity you draw from the grid**. Its state holds the current **marktprijs+** (dynamic) purchase price — exactly what Frank Energie itself bills as **"the dynamic part"** ("het dynamische deel") in its app and on the invoice:
+
+```text
+marktprijs+ = market_price + market_price_tax + sourcing_markup_price
+```
+
+which is the all-in price **minus the energy tax**.
+
+> **Why all three components?** The VAT basis differs per field. `market_price` is the raw market price **excluding** VAT; its 21% VAT arrives separately as `market_price_tax`. `sourcing_markup_price` (the sourcing markup) already **includes** VAT — in the Netherlands `0.01815`, which is `0.015` excluding VAT. Adding only the market price and the markup would therefore add a VAT-exclusive amount to a VAT-inclusive one and understate the result by the VAT on the market price. All three components come from the API per quarter-hour, so no VAT rate, markup or tax amount is hard-coded.
+
+**The energy tax is not included**, so this is not a complete consumer price. The complete all-in price remains available on the same entity as `full_block.total_price_eur_kwh`, and the cheapest/most-expensive and daily-array sensors still use the all-in basis `total_price_eur_kwh`. With the correct metadata (`device_class: monetary`) the Home Assistant Energy Dashboard accepts it as a price entity. No `state_class` is deliberately set: this is a current price, not a cumulative total.
 
 ### Grid feed-in
 

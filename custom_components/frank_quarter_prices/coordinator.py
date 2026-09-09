@@ -36,6 +36,7 @@ from .optimal_period import (
     get_optimal_expensive_duration_minutes,
     get_optimal_expensive_enabled,
 )
+from .price import calculate_dynamic_price
 from .price_zone import (
     calculate_price_zones,
     get_cheap_zone_margin_percent,
@@ -182,11 +183,12 @@ class FrankQuarterPricesCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # from it, so every current-price consumer (purchase and feed-in) shares
         # the exact same block without a second lookup or a second API request.
         current_price_block = self._determine_current_block(today_prices, now)
-        current_price = (
-            current_price_block.get("total_price_eur_kwh")
-            if current_price_block is not None
-            else None
-        )
+        # Frank's "marktprijs+" basis (market price + sourcing markup), which is
+        # what Frank bills as "het dynamische deel" -- not the all-in price. The
+        # all-in price stays available on the block as ``total_price_eur_kwh`` and
+        # is what every other price entity (cheapest/most expensive, the daily
+        # arrays, the zones and the optimal periods) still uses.
+        current_price = calculate_dynamic_price(current_price_block)
 
         # Derive today's price zones once per update, here, so the four zone
         # sensors and the two period binary sensors all read one shared result

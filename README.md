@@ -174,7 +174,7 @@ Voor elke dag vraagt de integratie **alle** prijsblokken voor stroom op bij Fran
 
 | Entiteit | Beschrijving | Status | Eenheid |
 | --- | --- | --- | --- |
-| `sensor.frank_current_price` | Prijs van het op dit moment actieve blok | `total_price_eur_kwh` | EUR/kWh |
+| `sensor.frank_current_price` | Dynamische afnameprijs ("marktprijs+") van het op dit moment actieve blok | `market_price + market_price_tax + sourcing_markup_price` | EUR/kWh |
 | `sensor.frank_current_return_price` | Geschatte actuele terugleverprijs voor stroom, op basis van het geverifieerde Frank-marktprijsveld en de ingestelde teruglevercorrectie | berekende prijs | EUR/kWh |
 | `sensor.frank_cheapest_today` | Goedkoopste blokprijs van de volledige dag vandaag | `total_price_eur_kwh` | EUR/kWh |
 | `sensor.frank_cheapest_time_today` | Starttijd van het goedkoopste blok vandaag | `HH:MM` | — |
@@ -447,7 +447,17 @@ Selecteer vervolgens de entiteit die wordt weergegeven als **Current price**:
 sensor.frank_current_price
 ```
 
-Deze sensor wordt gebruikt voor de **kosten van stroom die je van het net afneemt** en bevat de actuele afnameprijs (`total_price_eur_kwh`) als numerieke waarde in **EUR/kWh**, met de juiste metadata (`device_class: monetary`), zodat het Home Assistant Energy Dashboard hem als prijsentiteit accepteert. Er wordt bewust geen `state_class` ingesteld: dit is een actuele prijs, geen cumulatief totaal.
+Deze sensor wordt gebruikt voor de **kosten van stroom die je van het net afneemt**. De status bevat de actuele **marktprijs+** (dynamische) afnameprijs — exact wat Frank Energie zelf in de app en op de factuur als **"het dynamische deel"** factureert:
+
+```text
+marktprijs+ = market_price + market_price_tax + sourcing_markup_price
+```
+
+oftewel de all-in prijs **min de energiebelasting**.
+
+> **Waarom alle drie de componenten?** De btw-grondslag verschilt per veld. `market_price` is de kale marktprijs **exclusief** btw; de 21% btw daarover komt apart binnen als `market_price_tax`. `sourcing_markup_price` (de inkoopvergoeding) is al **inclusief** btw — in Nederland `0,01815`, wat neerkomt op `0,015` exclusief btw. Alleen de marktprijs en de inkoopvergoeding optellen zou dus een bedrag exclusief btw bij een bedrag inclusief btw optellen en het resultaat met de btw over de marktprijs onderschatten. Alle drie de componenten komen per kwartier uit de API, dus er wordt geen btw-tarief, opslag of belastingbedrag hard-coded.
+
+**Energiebelasting is niet opgenomen**, dus dit is géén volledige consumentenprijs. De volledige all-in prijs blijft beschikbaar op dezelfde entiteit als `full_block.total_price_eur_kwh`, en de goedkoopste/duurste- en dagreeksensoren gebruiken nog steeds de all-in basis `total_price_eur_kwh`. Met de juiste metadata (`device_class: monetary`) accepteert het Home Assistant Energy Dashboard hem als prijsentiteit. Er wordt bewust geen `state_class` ingesteld: dit is een actuele prijs, geen cumulatief totaal.
 
 ### Teruglevering aan het net
 
