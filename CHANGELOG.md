@@ -5,7 +5,9 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.0-beta.1] - 2026-09-09
+
+> **Beta / pre-release.** This release changes the meaning of an existing sensor. Install it to help validate the new price basis, and compare your Home Assistant Energy Dashboard totals against the Frank Energie app before a stable release follows.
 
 ### Changed
 
